@@ -702,7 +702,7 @@ var Database = class {
   getCourseById(id) {
     return this.courses.find((c) => c.id === id);
   }
-  updateCourse(id, updates) {
+  async updateCourse(id, updates) {
     const idx = this.courses.findIndex((c) => c.id === id);
     if (idx === -1) return null;
     const current = this.courses[idx];
@@ -727,6 +727,22 @@ var Database = class {
     console.log(
       `[DB] Curso atualizado: ${id} | Pre\xE7o: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`
     );
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { error } = await supabase.from("courses").update({
+          price: updated.price,
+          cost_price: updated.costPrice,
+          profit_percent: updated.profitPercent,
+          is_active: updated.isActive
+        }).eq("id", id);
+        if (error) {
+          console.error("[SUPABASE] Erro ao atualizar curso:", error.message);
+        }
+      } catch (err) {
+        console.error("[SUPABASE] Exce\xE7\xE3o ao atualizar curso:", err);
+      }
+    }
     return updated;
   }
   createCourse(newCourse) {
@@ -1816,14 +1832,19 @@ apiRouter.get("/courses/:id", (req, res) => {
   if (!course) return res.status(404).json({ error: "Curso n\xE3o encontrado." });
   res.json(course);
 });
-apiRouter.put("/courses/:id", (req, res) => {
+apiRouter.put("/courses/:id", async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
-  const updatedCourse = db.updateCourse(id, updates);
-  if (!updatedCourse) {
-    return res.status(404).json({ error: "Curso n\xE3o encontrado para atualiza\xE7\xE3o." });
+  try {
+    const updatedCourse = await db.updateCourse(id, updates);
+    if (!updatedCourse) {
+      return res.status(404).json({ error: "Curso n\xE3o encontrado para atualiza\xE7\xE3o." });
+    }
+    res.json({ success: true, course: updatedCourse });
+  } catch (err) {
+    console.error("Erro ao atualizar curso:", err);
+    res.status(500).json({ error: err.message || "Erro ao atualizar curso." });
   }
-  res.json({ success: true, course: updatedCourse });
 });
 apiRouter.post("/courses", (req, res) => {
   try {

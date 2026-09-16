@@ -90,16 +90,21 @@ apiRouter.get("/courses/:id", (req, res) => {
 });
 
 // 3.1 Atualizar curso (Preço de Custo, Lucro %, Preço de Venda, Status Ativo/Inativo, Propriedades)
-apiRouter.put("/courses/:id", (req, res) => {
+apiRouter.put("/courses/:id", async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
-  const updatedCourse = db.updateCourse(id, updates);
-  if (!updatedCourse) {
-    return res
-      .status(404)
-      .json({ error: "Curso não encontrado para atualização." });
+  try {
+    const updatedCourse = await db.updateCourse(id, updates);
+    if (!updatedCourse) {
+      return res
+        .status(404)
+        .json({ error: "Curso não encontrado para atualização." });
+    }
+    res.json({ success: true, course: updatedCourse });
+  } catch (err: any) {
+    console.error("Erro ao atualizar curso:", err);
+    res.status(500).json({ error: err.message || "Erro ao atualizar curso." });
   }
-  res.json({ success: true, course: updatedCourse });
 });
 
 // 3.2 Cadastrar Novo Curso na Plataforma

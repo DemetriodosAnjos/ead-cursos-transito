@@ -80,7 +80,10 @@ class Database {
     return this.courses.find((c) => c.id === id);
   }
 
-  updateCourse(id: string, updates: Partial<Course>): Course | null {
+  async updateCourse(
+    id: string,
+    updates: Partial<Course>,
+  ): Promise<Course | null> {
     const idx = this.courses.findIndex((c) => c.id === id);
     if (idx === -1) return null;
 
@@ -98,7 +101,6 @@ class Database {
     ) {
       const cost = updated.costPrice ?? current.costPrice ?? 0;
       if (updates.profitPercent !== undefined && updates.price === undefined) {
-        // Lucro % informado manualmente -> recalcula preço de venda
         const profit = updates.profitPercent;
         updated.price =
           cost > 0 ? Number((cost * (1 + profit / 100)).toFixed(2)) : cost;
@@ -106,7 +108,6 @@ class Database {
         updates.price !== undefined &&
         updates.profitPercent === undefined
       ) {
-        // Preço de venda informado manualmente -> recalcula percentual de lucro
         const price = updates.price;
         updated.profitPercent =
           cost > 0 ? Number((((price - cost) / cost) * 100).toFixed(1)) : 0;
@@ -115,7 +116,6 @@ class Database {
         updates.price === undefined &&
         updates.profitPercent === undefined
       ) {
-        // Custo atualizado -> recalcula preço baseado no lucro existente
         const profit = updated.profitPercent ?? 0;
         updated.price =
           cost > 0 ? Number((cost * (1 + profit / 100)).toFixed(2)) : cost;
@@ -126,6 +126,29 @@ class Database {
     console.log(
       `[DB] Curso atualizado: ${id} | Preço: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`,
     );
+
+    // Persiste a alteração no Supabase
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { error } = await supabase
+          .from("courses")
+          .update({
+            price: updated.price,
+            cost_price: updated.costPrice,
+            profit_percent: updated.profitPercent,
+            is_active: updated.isActive,
+          })
+          .eq("id", id);
+
+        if (error) {
+          console.error("[SUPABASE] Erro ao atualizar curso:", error.message);
+        }
+      } catch (err) {
+        console.error("[SUPABASE] Exceção ao atualizar curso:", err);
+      }
+    }
+
     return updated;
   }
 
