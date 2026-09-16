@@ -11,7 +11,14 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json());
+// Suporte a parsing de JSON tolerante a ambientes serverless (Vercel) e Express tradicional
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+app.use(express.urlencoded({ extended: true }));
 
 // Permite CORS caso frontend e backend estejam em domínios ou portas diferentes
 app.use((req, res, next) => {
@@ -181,6 +188,7 @@ apiRouter.get('/student/portal', async (req, res) => {
 // 4. Criar Pré-Matrícula e Gerar Pagamento Pix
 apiRouter.post('/pix/create', async (req, res) => {
   try {
+    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) || {};
     const { 
       courseId, 
       customerName, 
@@ -191,7 +199,7 @@ apiRouter.post('/pix/create', async (req, res) => {
       customerCnhNumber = '',
       customerCnhCategory = '',
       gateway = 'MERCADO_PAGO'
-    } = req.body;
+    } = body;
 
     if (!courseId || !customerName || !customerEmail || !customerCpf) {
       return res.status(400).json({ 
