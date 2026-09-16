@@ -685,7 +685,9 @@ var Database = class {
           is_featured: c.isFeatured || false
         }));
         await supabase.from("courses").upsert(coursesToInsert);
-        console.log("[SUPABASE] 28 cursos sincronizados com sucesso no PostgreSQL!");
+        console.log(
+          "[SUPABASE] 28 cursos sincronizados com sucesso no PostgreSQL!"
+        );
       }
     } catch (err) {
       console.warn("[SUPABASE] Aviso ao sincronizar cursos:", err);
@@ -722,7 +724,9 @@ var Database = class {
       }
     }
     this.courses[idx] = updated;
-    console.log(`[DB] Curso atualizado: ${id} | Pre\xE7o: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`);
+    console.log(
+      `[DB] Curso atualizado: ${id} | Pre\xE7o: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`
+    );
     return updated;
   }
   createCourse(newCourse) {
@@ -752,14 +756,18 @@ var Database = class {
       modules: Array.isArray(newCourse.modules) ? newCourse.modules : []
     };
     this.courses.unshift(course);
-    console.log(`[DB] Novo curso cadastrado com sucesso: [${course.id}] ${course.title} (Pre\xE7o: R$ ${course.price})`);
+    console.log(
+      `[DB] Novo curso cadastrado com sucesso: [${course.id}] ${course.title} (Pre\xE7o: R$ ${course.price})`
+    );
     return course;
   }
   toggleCourseActive(id) {
     const course = this.courses.find((c) => c.id === id);
     if (!course) return { success: false, isActive: false };
     course.isActive = course.isActive === false ? true : false;
-    console.log(`[DB] Status do curso [${id}] alterado para: ${course.isActive ? "ATIVO" : "INATIVO/OCULTO"}`);
+    console.log(
+      `[DB] Status do curso [${id}] alterado para: ${course.isActive ? "ATIVO" : "INATIVO/OCULTO"}`
+    );
     return { success: true, isActive: course.isActive, course };
   }
   deleteCourse(id) {
@@ -777,20 +785,33 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        console.log("[SUPABASE] Gravando aluno e pedido para CPF:", order.customerCpf);
-        const { data: studentData, error: studentError } = await supabase.from("students").upsert({
-          cpf: order.customerCpf,
-          full_name: order.customerName,
-          email: order.customerEmail,
-          whatsapp: order.customerWhatsapp,
-          birth_date: order.customerBirthDate || null,
-          cnh_number: order.customerCnhNumber,
-          cnh_category: order.customerCnhCategory
-        }, { onConflict: "cpf" }).select("id").single();
+        console.log(
+          "[SUPABASE] Gravando aluno e pedido para CPF:",
+          order.customerCpf
+        );
+        const { data: studentData, error: studentError } = await supabase.from("students").upsert(
+          {
+            cpf: order.customerCpf,
+            full_name: order.customerName,
+            email: order.customerEmail,
+            whatsapp: order.customerWhatsapp,
+            birth_date: order.customerBirthDate || null,
+            cnh_number: order.customerCnhNumber,
+            cnh_category: order.customerCnhCategory
+          },
+          { onConflict: "cpf" }
+        ).select("id").single();
         if (studentError) {
-          console.error("[SUPABASE] Erro ao gravar aluno na tabela students:", studentError.message, studentError.details);
+          console.error(
+            "[SUPABASE] Erro ao gravar aluno na tabela students:",
+            studentError.message,
+            studentError.details
+          );
         } else {
-          console.log("[SUPABASE] Aluno gravado com sucesso! ID:", studentData?.id);
+          console.log(
+            "[SUPABASE] Aluno gravado com sucesso! ID:",
+            studentData?.id
+          );
         }
         const { error: orderError } = await supabase.from("orders").insert({
           id: order.id,
@@ -814,20 +835,75 @@ var Database = class {
           access_dispatched_status: order.accessDispatchedStatus
         });
         if (orderError) {
-          console.error("[SUPABASE] Erro ao gravar pedido na tabela orders:", orderError.message, orderError.details);
+          console.error(
+            "[SUPABASE] Erro ao gravar pedido na tabela orders:",
+            orderError.message,
+            orderError.details
+          );
         } else {
-          console.log("[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:", order.id);
+          console.log(
+            "[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:",
+            order.id
+          );
         }
       } catch (err) {
-        console.error("[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:", err);
+        console.error(
+          "[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:",
+          err
+        );
       }
     } else {
-      console.warn("[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env");
+      console.warn(
+        "[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env"
+      );
     }
     return order;
   }
-  getOrderByTxid(txidOrId) {
-    return this.orders.get(txidOrId);
+  async getOrderByTxid(txidOrId) {
+    const cached = this.orders.get(txidOrId);
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from("orders").select("*").or(`id.eq.${txidOrId},txid.eq.${txidOrId}`).limit(1).maybeSingle();
+        if (data && !error) {
+          const restored = {
+            id: data.id,
+            txid: data.txid,
+            gateway: data.gateway || "MERCADO_PAGO",
+            courseId: data.course_id,
+            courseTitle: data.course_title,
+            courseSubtitle: "DETRAN Homologado",
+            courseThumbnail: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80",
+            customerName: data.customer_name,
+            customerEmail: data.customer_email,
+            customerCpf: data.customer_cpf,
+            customerWhatsapp: data.customer_whatsapp,
+            customerBirthDate: data.customer_birth_date || "",
+            customerCnhNumber: data.customer_cnh_number || "",
+            customerCnhCategory: data.customer_cnh_category || "B",
+            amount: Number(data.course_price || 0),
+            status: data.status,
+            statusMessage: data.status_message,
+            qrCodeUrl: data.qr_code_url,
+            pixCopiaECola: data.pix_copia_e_cola,
+            createdAt: data.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+            paidAt: data.paid_at,
+            accessDispatchedStatus: data.access_dispatched_status,
+            mercadoPagoPaymentId: data.mercado_pago_payment_id,
+            paymentMethod: data.payment_method || "PIX"
+          };
+          this.orders.set(restored.id, restored);
+          this.orders.set(restored.txid, restored);
+          return restored;
+        }
+      } catch (err) {
+        console.warn(
+          "[DB] Erro ao consultar status do pedido no Supabase:",
+          err
+        );
+      }
+    }
+    return cached;
   }
   getOrderById(id) {
     return this.orders.get(id);
@@ -970,7 +1046,10 @@ var Database = class {
           return restored;
         }
       } catch (err) {
-        console.warn("[DB] Erro ao checar pedido duplicado por curso/cpf:", err);
+        console.warn(
+          "[DB] Erro ao checar pedido duplicado por curso/cpf:",
+          err
+        );
       }
     }
     return null;
@@ -1092,7 +1171,10 @@ var Database = class {
           }
         }
       } catch (err) {
-        console.warn("[DB] Erro ao consultar registros do aluno no Supabase:", err);
+        console.warn(
+          "[DB] Erro ao consultar registros do aluno no Supabase:",
+          err
+        );
       }
     }
     const authorized = registeredInSupabase || registeredInAdmin;
@@ -1132,6 +1214,7 @@ var Database = class {
     const uniqueOrders = /* @__PURE__ */ new Map();
     const supabase = await getSupabase();
     const studentsBirthMap = /* @__PURE__ */ new Map();
+    let supabaseOrdersLoaded = false;
     if (supabase) {
       try {
         const { data: studentsData } = await supabase.from("students").select("cpf, birth_date");
@@ -1148,10 +1231,11 @@ var Database = class {
       try {
         const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
         if (data && !error) {
+          supabaseOrdersLoaded = true;
+          this.orders.clear();
           for (const row of data) {
             const cleanCpf = (row.customer_cpf || "").replace(/\D/g, "");
-            const localOrder = this.orders.get(row.id);
-            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || localOrder?.customerBirthDate || "";
+            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || "";
             const ord = {
               id: row.id,
               txid: row.txid,
@@ -1186,9 +1270,11 @@ var Database = class {
         console.warn("[DB] Erro ao listar pedidos do Supabase:", err);
       }
     }
-    for (const order of this.orders.values()) {
-      if (!uniqueOrders.has(order.id)) {
-        uniqueOrders.set(order.id, order);
+    if (!supabaseOrdersLoaded) {
+      for (const order of this.orders.values()) {
+        if (!uniqueOrders.has(order.id)) {
+          uniqueOrders.set(order.id, order);
+        }
       }
     }
     return Array.from(uniqueOrders.values()).sort(
@@ -1232,13 +1318,23 @@ var Database = class {
       this.orders.set(order.id, order);
       const supabase = await getSupabase();
       if (supabase) {
-        supabase.from("orders").update({
-          status: "PAID",
-          paid_at: order.paidAt,
-          status_message: order.statusMessage,
-          mercado_pago_payment_id: mercadoPagoId || order.mercadoPagoPaymentId,
-          access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL"
-        }).or(`id.eq.${order.id},txid.eq.${order.txid}`).then();
+        try {
+          const { error } = await supabase.from("orders").update({
+            status: "PAID",
+            paid_at: order.paidAt,
+            status_message: order.statusMessage,
+            mercado_pago_payment_id: mercadoPagoId || order.mercadoPagoPaymentId,
+            access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL"
+          }).or(`id.eq.${order.id},txid.eq.${order.txid}`);
+          if (error) {
+            console.error(
+              "[SUPABASE] Erro ao marcar pedido como PAID:",
+              error.message
+            );
+          }
+        } catch (err) {
+          console.error("[SUPABASE] Exce\xE7\xE3o ao marcar pedido como PAID:", err);
+        }
       }
       return { order };
     }
@@ -1253,10 +1349,20 @@ var Database = class {
     this.orders.set(order.id, order);
     const supabase = await getSupabase();
     if (supabase) {
-      supabase.from("orders").update({
-        access_dispatched_status: "ENVIADO",
-        access_dispatched_at: order.accessDispatchedAt
-      }).eq("id", order.id).then();
+      try {
+        const { error } = await supabase.from("orders").update({
+          access_dispatched_status: "ENVIADO",
+          access_dispatched_at: order.accessDispatchedAt
+        }).eq("id", order.id);
+        if (error) {
+          console.error(
+            "[SUPABASE] Erro ao marcar acesso como enviado:",
+            error.message
+          );
+        }
+      } catch (err) {
+        console.error("[SUPABASE] Exce\xE7\xE3o ao marcar acesso como enviado:", err);
+      }
     }
     return order;
   }
@@ -1666,8 +1772,14 @@ app.use((req, res, next) => {
 app.use(import_express.default.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -1679,7 +1791,11 @@ var ADMIN_USER = process.env.ADMIN_USER || "admin";
 var ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 var apiRouter = import_express.default.Router();
 apiRouter.get("/health", (req, res) => {
-  res.json({ status: "ok", uptime: process.uptime(), timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
 });
 apiRouter.get("/gateways/config-status", (req, res) => {
   const currentAppUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
@@ -1788,7 +1904,9 @@ apiRouter.get("/student/portal", async (req, res) => {
     });
   } catch (err) {
     console.error("Erro ao verificar autoriza\xE7\xE3o do aluno:", err);
-    return res.status(500).json({ error: err.message || "Erro ao consultar autoriza\xE7\xE3o no banco de dados" });
+    return res.status(500).json({
+      error: err.message || "Erro ao consultar autoriza\xE7\xE3o no banco de dados"
+    });
   }
 });
 apiRouter.post("/pix/create", async (req, res) => {
@@ -1814,7 +1932,10 @@ apiRouter.post("/pix/create", async (req, res) => {
     if (!course) {
       return res.status(404).json({ error: "Curso selecionado n\xE3o foi encontrado no cat\xE1logo." });
     }
-    const existingOrder = await db.findActiveOrderByCpfAndCourse(customerCpf, courseId);
+    const existingOrder = await db.findActiveOrderByCpfAndCourse(
+      customerCpf,
+      courseId
+    );
     if (existingOrder) {
       if (existingOrder.status === "PAID") {
         return res.status(409).json({
@@ -1916,15 +2037,18 @@ apiRouter.get("/orders/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-apiRouter.get("/pix/status/:txid", (req, res) => {
+apiRouter.get("/pix/status/:txid", async (req, res) => {
   const { txid } = req.params;
-  const order = db.getOrderByTxid(txid);
-  if (!order) {
-    return res.status(404).json({ error: "Matr\xEDcula n\xE3o encontrada." });
+  try {
+    const order = await db.getOrderByTxid(txid);
+    if (!order) {
+      return res.status(404).json({ error: "Matr\xEDcula n\xE3o encontrada." });
+    }
+    return res.json({ order });
+  } catch (err) {
+    console.error("Erro ao consultar status do pedido:", err);
+    return res.status(500).json({ error: err.message });
   }
-  return res.json({
-    order
-  });
 });
 apiRouter.post("/orders/:orderId/status", (req, res) => {
   const { orderId } = req.params;
@@ -1950,12 +2074,18 @@ var handleWebhookGet = (req, res) => {
 var handleWebhookPost = async (req, res) => {
   const payload = req.body || {};
   const query = req.query || {};
-  console.log("[WEBHOOK MERCADO PAGO RECEBIDO]", JSON.stringify({ body: payload, query }, null, 2));
+  console.log(
+    "[WEBHOOK MERCADO PAGO RECEBIDO]",
+    JSON.stringify({ body: payload, query }, null, 2)
+  );
   try {
     const paymentId = payload?.data?.id || payload?.id || (query.topic === "payment" ? query.id : null);
     const isMercadoPagoTest = payload?.live_mode === false || paymentId === "123456" || payload?.action === "payment.updated" && (!paymentId || paymentId === "123456");
     if (isMercadoPagoTest) {
-      console.log("[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:", payload);
+      console.log(
+        "[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:",
+        payload
+      );
       db.addWebhookLog({
         gateway: "MERCADO_PAGO",
         endpoint: req.originalUrl || "/api/webhooks/mercadopago",
@@ -1982,7 +2112,9 @@ var handleWebhookPost = async (req, res) => {
       });
       return res.status(200).send("OK");
     }
-    const mpDetails = await mercadoPagoService.getPaymentDetails(String(paymentId));
+    const mpDetails = await mercadoPagoService.getPaymentDetails(
+      String(paymentId)
+    );
     const externalReference = mpDetails?.external_reference || payload?.external_reference;
     const mpStatus = mpDetails?.status || "approved";
     const paymentType = mpDetails?.payment_type_id || "bank_transfer";
@@ -2000,7 +2132,10 @@ var handleWebhookPost = async (req, res) => {
         if (paymentType === "credit_card") methodLabel = "CREDIT_CARD";
         else if (paymentType === "debit_card") methodLabel = "DEBIT_CARD";
         foundOrder.paymentMethod = methodLabel;
-        const { order } = await db.markOrderAsPaid(foundOrder.id, String(paymentId));
+        const { order } = await db.markOrderAsPaid(
+          foundOrder.id,
+          String(paymentId)
+        );
         if (order) {
           order.paymentMethod = methodLabel;
           notificationService.sendPaymentConfirmedNotification({
@@ -2021,9 +2156,17 @@ var handleWebhookPost = async (req, res) => {
           statusMessage: `Pagamento #${paymentId} Aprovado (${paymentType.toUpperCase()} / ${paymentMethod.toUpperCase()}).`,
           rawPayload: { body: payload, query, mpDetails }
         });
-        return res.status(200).json({ status: "PROCESSED", orderId: order?.id, method: methodLabel });
+        return res.status(200).json({
+          status: "PROCESSED",
+          orderId: order?.id,
+          method: methodLabel
+        });
       } else if (mpStatus === "rejected") {
-        await db.updateOrderStatus(foundOrder.id, "ERROR", "Pagamento recusado pela operadora do cart\xE3o ou banco emissor.");
+        await db.updateOrderStatus(
+          foundOrder.id,
+          "ERROR",
+          "Pagamento recusado pela operadora do cart\xE3o ou banco emissor."
+        );
         db.addWebhookLog({
           gateway: "MERCADO_PAGO",
           endpoint: req.originalUrl || "/api/webhooks/mercadopago",
@@ -2077,15 +2220,21 @@ webhookPaths.forEach((p) => {
 });
 apiRouter.post("/simulador/pagar-pix", async (req, res) => {
   const { txid } = req.body;
-  const order = db.getOrderByTxid(txid);
+  const order = await db.getOrderByTxid(txid);
   if (!order) {
     return res.status(404).json({ error: "Pedido n\xE3o encontrado para o txid informado." });
   }
   if (order.status === "PAID") {
-    return res.json({ message: "Pedido j\xE1 se encontra marcado como PAGO.", order });
+    return res.json({
+      message: "Pedido j\xE1 se encontra marcado como PAGO.",
+      order
+    });
   }
   const simulatedMpPaymentId = order.mercadoPagoPaymentId || `998877${Date.now()}`;
-  const { order: paidOrder } = await db.markOrderAsPaid(order.id, simulatedMpPaymentId);
+  const { order: paidOrder } = await db.markOrderAsPaid(
+    order.id,
+    simulatedMpPaymentId
+  );
   if (paidOrder) {
     notificationService.sendPaymentConfirmedNotification({
       customerName: paidOrder.customerName,
@@ -2108,7 +2257,8 @@ apiRouter.post("/simulador/pagar-pix", async (req, res) => {
   return res.json({
     success: true,
     message: "Pagamento confirmado e notifica\xE7\xE3o enviada!",
-    order: db.getOrderByTxid(order.id)
+    order: await db.getOrderByTxid(order.id)
+    // <-- await adicionado
   });
 });
 apiRouter.post("/admin/login", (req, res) => {
@@ -2131,12 +2281,20 @@ var requireAdminAuth = (req, res, next) => {
   }
   next();
 };
-apiRouter.post("/admin/orders/:orderId/mark-dispatched", requireAdminAuth, (req, res) => {
-  const { orderId } = req.params;
-  const order = db.markAccessAsDispatched(orderId);
-  if (!order) return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
-  res.json({ order, message: "Status atualizado para: Acesso Enviado Manualmente." });
-});
+apiRouter.post(
+  "/admin/orders/:orderId/mark-dispatched",
+  requireAdminAuth,
+  (req, res) => {
+    const { orderId } = req.params;
+    const order = db.markAccessAsDispatched(orderId);
+    if (!order)
+      return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
+    res.json({
+      order,
+      message: "Status atualizado para: Acesso Enviado Manualmente."
+    });
+  }
+);
 apiRouter.get("/admin/overview", requireAdminAuth, async (req, res) => {
   const orders = await db.getAllOrdersAsync();
   const webhookLogs = db.getWebhookLogs();

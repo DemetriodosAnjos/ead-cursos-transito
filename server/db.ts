@@ -297,8 +297,63 @@ class Database {
     return order;
   }
 
-  getOrderByTxid(txidOrId: string): Order | undefined {
-    return this.orders.get(txidOrId);
+  async getOrderByTxid(txidOrId: string): Promise<Order | undefined> {
+    // 1. Tenta memória primeiro (resposta rápida)
+    const cached = this.orders.get(txidOrId);
+
+    // 2. Sempre confirma no Supabase, que é a fonte da verdade
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("orders")
+          .select("*")
+          .or(`id.eq.${txidOrId},txid.eq.${txidOrId}`)
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error) {
+          const restored: Order = {
+            id: data.id,
+            txid: data.txid,
+            gateway: data.gateway || "MERCADO_PAGO",
+            courseId: data.course_id,
+            courseTitle: data.course_title,
+            courseSubtitle: "DETRAN Homologado",
+            courseThumbnail:
+              "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80",
+            customerName: data.customer_name,
+            customerEmail: data.customer_email,
+            customerCpf: data.customer_cpf,
+            customerWhatsapp: data.customer_whatsapp,
+            customerBirthDate: data.customer_birth_date || "",
+            customerCnhNumber: data.customer_cnh_number || "",
+            customerCnhCategory: data.customer_cnh_category || "B",
+            amount: Number(data.course_price || 0),
+            status: data.status,
+            statusMessage: data.status_message,
+            qrCodeUrl: data.qr_code_url,
+            pixCopiaECola: data.pix_copia_e_cola,
+            createdAt: data.created_at || new Date().toISOString(),
+            paidAt: data.paid_at,
+            accessDispatchedStatus: data.access_dispatched_status,
+            mercadoPagoPaymentId: data.mercado_pago_payment_id,
+            paymentMethod: data.payment_method || "PIX",
+          };
+          this.orders.set(restored.id, restored);
+          this.orders.set(restored.txid, restored);
+          return restored;
+        }
+      } catch (err) {
+        console.warn(
+          "[DB] Erro ao consultar status do pedido no Supabase:",
+          err,
+        );
+      }
+    }
+
+    // 3. Fallback pra memória se Supabase falhar/não configurado
+    return cached;
   }
 
   getOrderById(id: string): Order | undefined {
@@ -874,18 +929,28 @@ class Database {
 
       const supabase = await getSupabase();
       if (supabase) {
-        supabase
-          .from("orders")
-          .update({
-            status: "PAID",
-            paid_at: order.paidAt,
-            status_message: order.statusMessage,
-            mercado_pago_payment_id:
-              mercadoPagoId || order.mercadoPagoPaymentId,
-            access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL",
-          })
-          .or(`id.eq.${order.id},txid.eq.${order.txid}`)
-          .then();
+        try {
+          const { error } = await supabase
+            .from("orders")
+            .update({
+              status: "PAID",
+              paid_at: order.paidAt,
+              status_message: order.statusMessage,
+              mercado_pago_payment_id:
+                mercadoPagoId || order.mercadoPagoPaymentId,
+              access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL",
+            })
+            .or(`id.eq.${order.id},txid.eq.${order.txid}`);
+
+          if (error) {
+            console.error(
+              "[SUPABASE] Erro ao marcar pedido como PAID:",
+              error.message,
+            );
+          }
+        } catch (err) {
+          console.error("[SUPABASE] Exceção ao marcar pedido como PAID:", err);
+        }
       }
 
       return { order };
@@ -906,14 +971,24 @@ class Database {
 
     const supabase = await getSupabase();
     if (supabase) {
-      supabase
-        .from("orders")
-        .update({
-          access_dispatched_status: "ENVIADO",
-          access_dispatched_at: order.accessDispatchedAt,
-        })
-        .eq("id", order.id)
-        .then();
+      try {
+        const { error } = await supabase
+          .from("orders")
+          .update({
+            access_dispatched_status: "ENVIADO",
+            access_dispatched_at: order.accessDispatchedAt,
+          })
+          .eq("id", order.id);
+
+        if (error) {
+          console.error(
+            "[SUPABASE] Erro ao marcar acesso como enviado:",
+            error.message,
+          );
+        }
+      } catch (err) {
+        console.error("[SUPABASE] Exceção ao marcar acesso como enviado:", err);
+      }
     }
 
     return order;

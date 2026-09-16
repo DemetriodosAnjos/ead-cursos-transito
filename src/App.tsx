@@ -1,43 +1,65 @@
-import React, { useState, useEffect, Suspense } from 'react';
-import { 
-  Play, 
-  Search, 
-  ShieldCheck, 
-  Award, 
-  Clock, 
-  ChevronRight, 
-  Lock, 
-  Terminal, 
-  CheckCircle2, 
-  BookOpen, 
-  Filter, 
-  Sparkles, 
-  PhoneCall, 
-  FileText, 
-  GraduationCap, 
-  Menu, 
-  X, 
-  Home, 
-  MessageCircle 
-} from 'lucide-react';
-import { Course, Order, StudentRegistration } from './types';
-import { COURSES, CATEGORIES } from './data/courses';
-import { HeroBanner } from './components/HeroBanner';
-import { CourseCard } from './components/CourseCard';
+import React, { useState, useEffect, Suspense } from "react";
+import {
+  Play,
+  Search,
+  ShieldCheck,
+  Award,
+  Clock,
+  ChevronRight,
+  Lock,
+  Terminal,
+  CheckCircle2,
+  BookOpen,
+  Filter,
+  Sparkles,
+  PhoneCall,
+  FileText,
+  GraduationCap,
+  Menu,
+  X,
+  Home,
+  MessageCircle,
+} from "lucide-react";
+import { Course, Order, StudentRegistration } from "./types";
+import { COURSES, CATEGORIES } from "./data/courses";
+import { HeroBanner } from "./components/HeroBanner";
+import { CourseCard } from "./components/CourseCard";
 
 // Carregamento Assíncrono (Code-Splitting / Lazy Loading) para reduzir drasticamente o bundle inicial e eliminar tela branca
-const RegistrationModal = React.lazy(() => import('./components/RegistrationModal').then(m => ({ default: m.RegistrationModal })));
-const PaymentModal = React.lazy(() => import('./components/PaymentModal').then(m => ({ default: m.PaymentModal })));
-const CourseDetailsModal = React.lazy(() => import('./components/CourseDetailsModal').then(m => ({ default: m.CourseDetailsModal })));
-const AdminPanel = React.lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
-const OrderRecoveryModal = React.lazy(() => import('./components/OrderRecoveryModal').then(m => ({ default: m.OrderRecoveryModal })));
-const StudentPortalModal = React.lazy(() => import('./components/StudentPortalModal').then(m => ({ default: m.StudentPortalModal })));
+const RegistrationModal = React.lazy(() =>
+  import("./components/RegistrationModal").then((m) => ({
+    default: m.RegistrationModal,
+  })),
+);
+const PaymentModal = React.lazy(() =>
+  import("./components/PaymentModal").then((m) => ({
+    default: m.PaymentModal,
+  })),
+);
+const CourseDetailsModal = React.lazy(() =>
+  import("./components/CourseDetailsModal").then((m) => ({
+    default: m.CourseDetailsModal,
+  })),
+);
+const AdminPanel = React.lazy(() =>
+  import("./components/AdminPanel").then((m) => ({ default: m.AdminPanel })),
+);
+const OrderRecoveryModal = React.lazy(() =>
+  import("./components/OrderRecoveryModal").then((m) => ({
+    default: m.OrderRecoveryModal,
+  })),
+);
+const StudentPortalModal = React.lazy(() =>
+  import("./components/StudentPortalModal").then((m) => ({
+    default: m.StudentPortalModal,
+  })),
+);
 
 export default function App() {
   const [courses, setCourses] = useState<Course[]>(COURSES);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+
   // Modais
   const [modalCourse, setModalCourse] = useState<Course | null>(null);
   const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
@@ -45,18 +67,18 @@ export default function App() {
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isRecoveryOpen, setIsRecoveryOpen] = useState(false);
   const [isStudentPortalOpen, setIsStudentPortalOpen] = useState(false);
-  const [studentPortalCpf, setStudentPortalCpf] = useState<string>('');
+  const [studentPortalCpf, setStudentPortalCpf] = useState<string>("");
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
   // Aba de Administração
-  const [viewMode, setViewMode] = useState<'vitrine' | 'admin'>('vitrine');
+  const [viewMode, setViewMode] = useState<"vitrine" | "admin">("vitrine");
 
   // Recuperação de pedido via link da URL (?orderId=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const orderId = params.get('orderId');
+    const orderId = params.get("orderId");
     if (orderId) {
       fetch(`/api/orders/${orderId}`)
         .then((res) => res.json())
@@ -66,7 +88,9 @@ export default function App() {
             setIsPaymentOpen(true);
           }
         })
-        .catch((err) => console.error('Erro ao recuperar pedido via URL:', err));
+        .catch((err) =>
+          console.error("Erro ao recuperar pedido via URL:", err),
+        );
     }
   }, []);
 
@@ -74,7 +98,7 @@ export default function App() {
     // Sincronizar catálogo com backend se disponível
     const fetchCourses = async () => {
       try {
-        const res = await fetch('/api/courses');
+        const res = await fetch("/api/courses");
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -82,7 +106,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.log('Usando catálogo local');
+        console.log("Usando catálogo local");
       }
     };
     fetchCourses();
@@ -93,8 +117,9 @@ export default function App() {
         setCourses(customEvt.detail);
       }
     };
-    window.addEventListener('courses-updated', handleCoursesEvent);
-    return () => window.removeEventListener('courses-updated', handleCoursesEvent);
+    window.addEventListener("courses-updated", handleCoursesEvent);
+    return () =>
+      window.removeEventListener("courses-updated", handleCoursesEvent);
   }, []);
 
   // Filtro de cursos
@@ -102,15 +127,18 @@ export default function App() {
     // Requisito 5: Inativar / Ocultar card do curso na plataforma
     if (c.isActive === false) return false;
 
-    const matchesCategory = selectedCategory === 'all' || c.category === selectedCategory;
-    const matchesSearch = 
+    const matchesCategory =
+      selectedCategory === "all" || c.category === selectedCategory;
+    const matchesSearch =
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.subtitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const featuredCourse = courses.find((c) => c.isFeatured && c.isActive !== false) || courses.find((c) => c.isActive !== false);
+  const featuredCourse =
+    courses.find((c) => c.isFeatured && c.isActive !== false) ||
+    courses.find((c) => c.isActive !== false);
 
   // Abertura do Modal de Matrícula
   const handleStartEnrollment = (course: Course, initialCpf?: string) => {
@@ -118,7 +146,7 @@ export default function App() {
     if (initialCpf) {
       setStudentPortalCpf(initialCpf);
     } else {
-      const saved = localStorage.getItem('ead_student_cpf');
+      const saved = localStorage.getItem("ead_student_cpf");
       if (saved) setStudentPortalCpf(saved);
     }
     setIsDetailsOpen(false);
@@ -137,9 +165,9 @@ export default function App() {
     setIsSubmitting(true);
 
     try {
-      const res = await fetch('/api/pix/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/pix/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           courseId: modalCourse.id,
           customerName: data.fullName,
@@ -149,12 +177,12 @@ export default function App() {
           customerBirthDate: data.birthDate,
           customerCnhNumber: data.cnhNumber,
           customerCnhCategory: data.cnhCategory,
-          gateway: 'MERCADO_PAGO',
+          gateway: "MERCADO_PAGO",
         }),
       });
 
       if (!res.ok) {
-        let errMessage = 'Erro ao processar matrícula.';
+        let errMessage = "Erro ao processar matrícula.";
         try {
           const errData = await res.json();
           // Se for duplicidade ou pedido pendente já existente
@@ -166,7 +194,7 @@ export default function App() {
           }
           errMessage = errData.error || errMessage;
         } catch {
-          errMessage = `Servidor retornou status ${res.status} (${res.statusText || 'Não encontrado'}). Verifique se o backend na Vercel está ativo.`;
+          errMessage = `Servidor retornou status ${res.status} (${res.statusText || "Não encontrado"}). Verifique se o backend na Vercel está ativo.`;
         }
         throw new Error(errMessage);
       }
@@ -175,39 +203,22 @@ export default function App() {
       try {
         resData = await res.json();
       } catch {
-        throw new Error('Resposta inválida recebida do servidor. Por favor, tente novamente.');
+        throw new Error(
+          "Resposta inválida recebida do servidor. Por favor, tente novamente.",
+        );
       }
       setCurrentOrder(resData.order);
       if (data.cpf) {
-        const clean = data.cpf.replace(/\D/g, '');
-        localStorage.setItem('ead_student_cpf', clean);
+        const clean = data.cpf.replace(/\D/g, "");
+        localStorage.setItem("ead_student_cpf", clean);
         setStudentPortalCpf(clean);
       }
       setIsRegistrationOpen(false);
       setIsPaymentOpen(true);
     } catch (err: any) {
-      alert(`Atenção: ${err.message || 'Erro ao salvar matrícula'}`);
+      alert(`Atenção: ${err.message || "Erro ao salvar matrícula"}`);
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Simular Pagamento via Webhook
-  const handleSimulateWebhook = async (txid: string) => {
-    try {
-      const res = await fetch('/api/simulador/pagar-pix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ txid }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.order) {
-          setCurrentOrder(data.order);
-        }
-      }
-    } catch (err) {
-      console.error('Erro na simulação do webhook:', err);
     }
   };
 
@@ -227,8 +238,8 @@ export default function App() {
               <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
-            <div 
-              onClick={() => setViewMode('vitrine')}
+            <div
+              onClick={() => setViewMode("vitrine")}
               className="cursor-pointer flex items-center gap-2"
             >
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded bg-red-600 flex items-center justify-center font-black text-white text-xs sm:text-base tracking-tighter shadow-lg shadow-red-900/40 shrink-0">
@@ -246,39 +257,57 @@ export default function App() {
 
             {/* Menu Desktop */}
             <nav className="hidden lg:flex items-center gap-4 text-xs font-semibold text-zinc-300">
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('all'); }}
-                className={`hover:text-white transition-colors ${viewMode === 'vitrine' && selectedCategory === 'all' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("all");
+                }}
+                className={`hover:text-white transition-colors ${viewMode === "vitrine" && selectedCategory === "all" ? "text-white font-bold" : ""}`}
               >
                 Início
               </button>
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('especializados'); }}
-                className={`hover:text-white transition-colors ${selectedCategory === 'especializados' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("especializados");
+                }}
+                className={`hover:text-white transition-colors ${selectedCategory === "especializados" ? "text-white font-bold" : ""}`}
               >
                 DETRAN Formação
               </button>
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('atualizacao'); }}
-                className={`hover:text-white transition-colors ${selectedCategory === 'atualizacao' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("atualizacao");
+                }}
+                className={`hover:text-white transition-colors ${selectedCategory === "atualizacao" ? "text-white font-bold" : ""}`}
               >
                 Atualização & Reciclagem
               </button>
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('saude'); }}
-                className={`hover:text-white transition-colors ${selectedCategory === 'saude' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("saude");
+                }}
+                className={`hover:text-white transition-colors ${selectedCategory === "saude" ? "text-white font-bold" : ""}`}
               >
                 Saúde & APH
               </button>
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('tea'); }}
-                className={`hover:text-white transition-colors ${selectedCategory === 'tea' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("tea");
+                }}
+                className={`hover:text-white transition-colors ${selectedCategory === "tea" ? "text-white font-bold" : ""}`}
               >
                 Jornada TEA
               </button>
-              <button 
-                onClick={() => { setViewMode('vitrine'); setSelectedCategory('nr'); }}
-                className={`hover:text-white transition-colors ${selectedCategory === 'nr' ? 'text-white font-bold' : ''}`}
+              <button
+                onClick={() => {
+                  setViewMode("vitrine");
+                  setSelectedCategory("nr");
+                }}
+                className={`hover:text-white transition-colors ${selectedCategory === "nr" ? "text-white font-bold" : ""}`}
               >
                 Normas NR
               </button>
@@ -287,7 +316,7 @@ export default function App() {
 
           {/* Busca & Ações Rápidas */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {viewMode === 'vitrine' && (
+            {viewMode === "vitrine" && (
               <div className="relative w-28 sm:w-44 md:w-56">
                 <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -322,16 +351,20 @@ export default function App() {
 
             <button
               id="toggle-admin-btn"
-              onClick={() => setViewMode(viewMode === 'vitrine' ? 'admin' : 'vitrine')}
+              onClick={() =>
+                setViewMode(viewMode === "vitrine" ? "admin" : "vitrine")
+              }
               className={`flex items-center gap-1.5 text-xs font-bold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border transition-all ${
-                viewMode === 'admin' 
-                  ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30' 
-                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800'
+                viewMode === "admin"
+                  ? "bg-red-600 text-white border-red-500 shadow-md shadow-red-900/30"
+                  : "bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
               }`}
               title="Painel Administrativo"
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{viewMode === 'admin' ? 'Vitrine' : 'Admin'}</span>
+              <span className="hidden sm:inline">
+                {viewMode === "admin" ? "Vitrine" : "Admin"}
+              </span>
             </button>
           </div>
         </div>
@@ -339,23 +372,27 @@ export default function App() {
 
       {/* SIDEBAR LATERAL (DRAWER ESQUERDA PARA DIREITA - MOBILE E TABLET) */}
       {isSidebarOpen && (
-        <div 
+        <div
           id="sidebar-backdrop"
-          onClick={() => setIsSidebarOpen(false)} 
+          onClick={() => setIsSidebarOpen(false)}
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 transition-opacity lg:hidden"
         />
       )}
 
-      <aside 
+      <aside
         id="mobile-sidebar-drawer"
         className={`fixed inset-y-0 left-0 z-50 w-[280px] sm:w-[320px] bg-zinc-950 border-r border-zinc-800 shadow-2xl flex flex-col justify-between transform transition-transform duration-300 ease-in-out lg:hidden ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Header do Drawer */}
         <div className="p-4 sm:p-5 border-b border-zinc-900 flex items-center justify-between">
-          <div 
-            onClick={() => { setViewMode('vitrine'); setSelectedCategory('all'); setIsSidebarOpen(false); }}
+          <div
+            onClick={() => {
+              setViewMode("vitrine");
+              setSelectedCategory("all");
+              setIsSidebarOpen(false);
+            }}
             className="cursor-pointer flex items-center gap-2.5"
           >
             <div className="w-8 h-8 rounded bg-red-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-red-900/40">
@@ -370,7 +407,7 @@ export default function App() {
               </span>
             </div>
           </div>
-          <button 
+          <button
             id="close-sidebar-btn"
             onClick={() => setIsSidebarOpen(false)}
             className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
@@ -385,7 +422,10 @@ export default function App() {
           {/* Destaque: Área do Aluno */}
           <button
             id="sidebar-student-portal-btn"
-            onClick={() => { setIsSidebarOpen(false); setIsStudentPortalOpen(true); }}
+            onClick={() => {
+              setIsSidebarOpen(false);
+              setIsStudentPortalOpen(true);
+            }}
             className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-red-600/25 to-red-950/40 border border-red-500/40 text-red-200 font-bold text-xs hover:border-red-500/80 transition-all shadow-md text-left"
           >
             <div className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center shrink-0">
@@ -393,7 +433,9 @@ export default function App() {
             </div>
             <div>
               <div className="text-white font-bold text-xs">Área do Aluno</div>
-              <div className="text-[10px] text-red-300/80 font-normal">Acessar aulas e certificados</div>
+              <div className="text-[10px] text-red-300/80 font-normal">
+                Acessar aulas e certificados
+              </div>
             </div>
           </button>
 
@@ -403,14 +445,16 @@ export default function App() {
 
           <nav className="space-y-1 text-xs font-semibold text-zinc-300">
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('all'); 
-                setIsSidebarOpen(false); 
-                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("all");
+                setIsSidebarOpen(false);
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                viewMode === 'vitrine' && selectedCategory === 'all' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                viewMode === "vitrine" && selectedCategory === "all"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <Home className="w-4 h-4 text-zinc-400" />
@@ -418,14 +462,18 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('especializados'); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("especializados");
                 setIsSidebarOpen(false);
-                document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                document
+                  .getElementById("catalog-section")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                selectedCategory === 'especializados' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                selectedCategory === "especializados"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <Award className="w-4 h-4 text-red-400" />
@@ -433,14 +481,18 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('atualizacao'); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("atualizacao");
                 setIsSidebarOpen(false);
-                document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                document
+                  .getElementById("catalog-section")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                selectedCategory === 'atualizacao' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                selectedCategory === "atualizacao"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <Clock className="w-4 h-4 text-amber-400" />
@@ -448,14 +500,18 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('saude'); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("saude");
                 setIsSidebarOpen(false);
-                document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                document
+                  .getElementById("catalog-section")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                selectedCategory === 'saude' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                selectedCategory === "saude"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -463,14 +519,18 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('tea'); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("tea");
                 setIsSidebarOpen(false);
-                document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                document
+                  .getElementById("catalog-section")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                selectedCategory === 'tea' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                selectedCategory === "tea"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <Sparkles className="w-4 h-4 text-sky-400" />
@@ -478,14 +538,18 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => { 
-                setViewMode('vitrine'); 
-                setSelectedCategory('nr'); 
+              onClick={() => {
+                setViewMode("vitrine");
+                setSelectedCategory("nr");
                 setIsSidebarOpen(false);
-                document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+                document
+                  .getElementById("catalog-section")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                selectedCategory === 'nr' ? 'bg-zinc-800 text-white font-bold' : 'hover:bg-zinc-900 hover:text-white'
+                selectedCategory === "nr"
+                  ? "bg-zinc-800 text-white font-bold"
+                  : "hover:bg-zinc-900 hover:text-white"
               }`}
             >
               <BookOpen className="w-4 h-4 text-purple-400" />
@@ -495,7 +559,10 @@ export default function App() {
             <div className="pt-3 pb-1 border-t border-zinc-900 space-y-1">
               <button
                 id="sidebar-recovery-btn"
-                onClick={() => { setIsSidebarOpen(false); setIsRecoveryOpen(true); }}
+                onClick={() => {
+                  setIsSidebarOpen(false);
+                  setIsRecoveryOpen(true);
+                }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
               >
                 <FileText className="w-4 h-4 text-amber-400" />
@@ -504,14 +571,18 @@ export default function App() {
 
               <button
                 id="sidebar-admin-btn"
-                onClick={() => { 
-                  setIsSidebarOpen(false); 
-                  setViewMode(viewMode === 'admin' ? 'vitrine' : 'admin'); 
+                onClick={() => {
+                  setIsSidebarOpen(false);
+                  setViewMode(viewMode === "admin" ? "vitrine" : "admin");
                 }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
               >
                 <Terminal className="w-4 h-4 text-zinc-400" />
-                <span>{viewMode === 'admin' ? 'Voltar à Vitrine' : 'Painel Administrativo'}</span>
+                <span>
+                  {viewMode === "admin"
+                    ? "Voltar à Vitrine"
+                    : "Painel Administrativo"}
+                </span>
               </button>
             </div>
           </nav>
@@ -533,7 +604,9 @@ export default function App() {
                 <span>Suporte WhatsApp</span>
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
               </div>
-              <div className="text-[11px] text-emerald-400/90 font-mono truncate">(41) 99788-4424</div>
+              <div className="text-[11px] text-emerald-400/90 font-mono truncate">
+                (41) 99788-4424
+              </div>
             </div>
           </a>
         </div>
@@ -541,21 +614,25 @@ export default function App() {
 
       {/* CONTEÚDO PRINCIPAL */}
       <main className="flex-1">
-        {viewMode === 'admin' ? (
+        {viewMode === "admin" ? (
           <div className="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-            <Suspense fallback={
-              <div className="flex flex-col items-center justify-center min-h-[400px] text-zinc-400 gap-3">
-                <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-sm font-medium">Carregando Painel Administrativo...</span>
-              </div>
-            }>
+            <Suspense
+              fallback={
+                <div className="flex flex-col items-center justify-center min-h-[400px] text-zinc-400 gap-3">
+                  <div className="w-8 h-8 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm font-medium">
+                    Carregando Painel Administrativo...
+                  </span>
+                </div>
+              }
+            >
               <AdminPanel courses={courses} onCoursesUpdated={setCourses} />
             </Suspense>
           </div>
         ) : (
           <div className="space-y-8">
             {/* HERO BANNER ESTILO NETFLIX */}
-            {!searchQuery && selectedCategory === 'all' && featuredCourse && (
+            {!searchQuery && selectedCategory === "all" && featuredCourse && (
               <HeroBanner
                 course={featuredCourse}
                 onSelectCourse={handleStartEnrollment}
@@ -564,7 +641,10 @@ export default function App() {
             )}
 
             {/* SEÇÃO DE FILTROS & CATEGORIAS */}
-            <section id="catalog-section" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <section
+              id="catalog-section"
+              className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4"
+            >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
                 <div>
                   <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -574,7 +654,8 @@ export default function App() {
                     </span>
                   </h2>
                   <p className="text-xs text-zinc-400 mt-1">
-                    Cursos 100% online com reconhecimento facial e inclusão automática na CNH Digital.
+                    Cursos 100% online com reconhecimento facial e inclusão
+                    automática na CNH Digital.
                   </p>
                 </div>
 
@@ -587,8 +668,8 @@ export default function App() {
                       onClick={() => setSelectedCategory(cat.id)}
                       className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
                         selectedCategory === cat.id
-                          ? 'bg-red-600 text-white shadow-md shadow-red-900/40'
-                          : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800/80'
+                          ? "bg-red-600 text-white shadow-md shadow-red-900/40"
+                          : "bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800/80"
                       }`}
                     >
                       {cat.label}
@@ -602,9 +683,14 @@ export default function App() {
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
               {filteredCourses.length === 0 ? (
                 <div className="p-12 text-center bg-zinc-900/50 rounded-xl border border-zinc-800">
-                  <p className="text-zinc-400 text-sm">Nenhum curso encontrado com os termos pesquisados.</p>
+                  <p className="text-zinc-400 text-sm">
+                    Nenhum curso encontrado com os termos pesquisados.
+                  </p>
                   <button
-                    onClick={() => { setSelectedCategory('all'); setSearchQuery(''); }}
+                    onClick={() => {
+                      setSelectedCategory("all");
+                      setSearchQuery("");
+                    }}
                     className="mt-3 text-xs text-red-500 hover:underline font-bold"
                   >
                     Limpar filtros
@@ -630,32 +716,51 @@ export default function App() {
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="w-6 h-6 text-red-500 shrink-0 mt-1" />
                   <div>
-                    <h4 className="text-sm font-bold text-white">Homologação Oficial</h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">Certificado válido em todo território nacional pelo DETRAN/CONTRAN.</p>
+                    <h4 className="text-sm font-bold text-white">
+                      Homologação Oficial
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Certificado válido em todo território nacional pelo
+                      DETRAN/CONTRAN.
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <Clock className="w-6 h-6 text-emerald-400 shrink-0 mt-1" />
                   <div>
-                    <h4 className="text-sm font-bold text-white">100% EAD Flexível</h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">Estude quando e onde quiser pelo celular ou computador.</p>
+                    <h4 className="text-sm font-bold text-white">
+                      100% EAD Flexível
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Estude quando e onde quiser pelo celular ou computador.
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <Award className="w-6 h-6 text-amber-400 shrink-0 mt-1" />
                   <div>
-                    <h4 className="text-sm font-bold text-white">Averbação na CNH</h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">Após a conclusão o curso é inserido direto no prontuário RENACH.</p>
+                    <h4 className="text-sm font-bold text-white">
+                      Averbação na CNH
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Após a conclusão o curso é inserido direto no prontuário
+                      RENACH.
+                    </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3">
                   <PhoneCall className="w-6 h-6 text-sky-400 shrink-0 mt-1" />
                   <div>
-                    <h4 className="text-sm font-bold text-white">Envio Manual Personalizado</h4>
-                    <p className="text-xs text-zinc-400 mt-0.5">Seu link exclusivo de acesso é conferido e enviado no seu WhatsApp.</p>
+                    <h4 className="text-sm font-bold text-white">
+                      Envio Manual Personalizado
+                    </h4>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      Seu link exclusivo de acesso é conferido e enviado no seu
+                      WhatsApp.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -668,7 +773,9 @@ export default function App() {
       <footer className="bg-zinc-950 border-t border-zinc-900 py-10 px-4 sm:px-6 lg:px-8 text-zinc-500 text-xs text-center">
         <div className="max-w-7xl mx-auto space-y-4">
           <div className="flex items-center justify-center gap-2">
-            <span className="font-bold text-zinc-300">DETRAN PR EAD Cursos Especializados</span>
+            <span className="font-bold text-zinc-300">
+              DETRAN PR EAD Cursos Especializados
+            </span>
             <span>•</span>
             <span>Plataforma Oficial de Capacitação</span>
           </div>
@@ -691,16 +798,24 @@ export default function App() {
             </button>
             <span className="text-zinc-700">•</span>
             <button
-              onClick={() => setViewMode(viewMode === 'vitrine' ? 'admin' : 'vitrine')}
+              onClick={() =>
+                setViewMode(viewMode === "vitrine" ? "admin" : "vitrine")
+              }
               className="text-zinc-400 hover:text-zinc-200 underline underline-offset-4 flex items-center gap-1"
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>{viewMode === 'admin' ? 'Voltar à Vitrine' : 'Painel da Coordenação'}</span>
+              <span>
+                {viewMode === "admin"
+                  ? "Voltar à Vitrine"
+                  : "Painel da Coordenação"}
+              </span>
             </button>
           </div>
 
           <p className="max-w-xl mx-auto text-zinc-600 text-[11px]">
-            Todos os cursos atendem rigorosamente às resoluções do CONTRAN e normas vigentes do DETRAN. O link de acesso à plataforma de estudos é liberado após a confirmação do pagamento.
+            Todos os cursos atendem rigorosamente às resoluções do CONTRAN e
+            normas vigentes do DETRAN. O link de acesso à plataforma de estudos
+            é liberado após a confirmação do pagamento.
           </p>
           <div className="pt-2 text-[10px] text-zinc-700">
             © 2026 Todos os direitos reservados.
@@ -733,7 +848,6 @@ export default function App() {
             order={currentOrder}
             isOpen={isPaymentOpen}
             onClose={() => setIsPaymentOpen(false)}
-            onSimulateWebhookPayment={handleSimulateWebhook}
           />
         </Suspense>
       )}
@@ -783,7 +897,7 @@ export default function App() {
       )}
 
       {/* TOOLBAR FIXA NA BASE DA TELA (MOBILE E TABLET) */}
-      <nav 
+      <nav
         id="mobile-bottom-toolbar"
         className="fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-800/90 shadow-[0_-8px_30px_rgba(0,0,0,0.85)] lg:hidden px-2 py-1.5"
         aria-label="Navegação rápida inferior"
@@ -793,36 +907,42 @@ export default function App() {
           <button
             id="bottom-nav-home"
             onClick={() => {
-              setViewMode('vitrine');
-              setSelectedCategory('all');
-              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setViewMode("vitrine");
+              setSelectedCategory("all");
+              window.scrollTo({ top: 0, behavior: "smooth" });
             }}
             className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-colors ${
-              viewMode === 'vitrine' && selectedCategory === 'all'
-                ? 'text-red-500 font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
+              viewMode === "vitrine" && selectedCategory === "all"
+                ? "text-red-500 font-bold"
+                : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
             <Home className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Início</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">
+              Início
+            </span>
           </button>
 
           {/* 2. Detran Formação (Esquerda) */}
           <button
             id="bottom-nav-formacao"
             onClick={() => {
-              setViewMode('vitrine');
-              setSelectedCategory('especializados');
-              document.getElementById('catalog-section')?.scrollIntoView({ behavior: 'smooth' });
+              setViewMode("vitrine");
+              setSelectedCategory("especializados");
+              document
+                .getElementById("catalog-section")
+                ?.scrollIntoView({ behavior: "smooth" });
             }}
             className={`flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-colors ${
-              selectedCategory === 'especializados'
-                ? 'text-red-500 font-bold'
-                : 'text-zinc-400 hover:text-zinc-200'
+              selectedCategory === "especializados"
+                ? "text-red-500 font-bold"
+                : "text-zinc-400 hover:text-zinc-200"
             }`}
           >
             <Award className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Formação</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">
+              Formação
+            </span>
           </button>
 
           {/* 3. Área do Aluno (Centro - Destaque) */}
@@ -836,7 +956,9 @@ export default function App() {
             >
               <GraduationCap className="w-6 h-6" />
             </button>
-            <span className="text-[9px] font-bold text-red-400 mt-1 tracking-tight">Área do Aluno</span>
+            <span className="text-[9px] font-bold text-red-400 mt-1 tracking-tight">
+              Área do Aluno
+            </span>
           </div>
 
           {/* 4. 2ª Via (Direita) */}
@@ -846,7 +968,9 @@ export default function App() {
             className="flex flex-col items-center justify-center py-1 px-2 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors"
           >
             <FileText className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">2ª Via</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">
+              2ª Via
+            </span>
           </button>
 
           {/* 5. Suporte WhatsApp (Direita) */}
@@ -859,7 +983,9 @@ export default function App() {
             title="Suporte WhatsApp: (41) 99788-4424"
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Suporte</span>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">
+              Suporte
+            </span>
           </a>
         </div>
       </nav>
@@ -882,7 +1008,9 @@ export default function App() {
             <span>Suporte WhatsApp</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
           </div>
-          <div className="text-[11px] text-emerald-100 font-mono">(41) 99788-4424</div>
+          <div className="text-[11px] text-emerald-100 font-mono">
+            (41) 99788-4424
+          </div>
         </div>
       </a>
     </div>

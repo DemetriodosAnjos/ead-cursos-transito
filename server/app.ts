@@ -1,11 +1,11 @@
-import express from 'express';
-import dotenv from 'dotenv';
-import { db } from './db';
-import { mercadoPagoService } from './mercadoPagoService';
-import { notificationService } from './notificationService';
-import { isSupabaseConfigured } from './supabase';
-import { testSupabaseConnection } from './supabaseTest';
-import { Order, PaymentGateway } from '../src/types';
+import express from "express";
+import dotenv from "dotenv";
+import { db } from "./db";
+import { mercadoPagoService } from "./mercadoPagoService";
+import { notificationService } from "./notificationService";
+import { isSupabaseConfigured } from "./supabase";
+import { testSupabaseConnection } from "./supabaseTest";
+import { Order, PaymentGateway } from "../src/types";
 
 dotenv.config();
 
@@ -13,19 +13,25 @@ const app = express();
 
 // Suporte a parsing de JSON tolerante a ambientes serverless (Vercel) e Express tradicional
 app.use((req, res, next) => {
-  if (req.body && typeof req.body === 'object') {
+  if (req.body && typeof req.body === "object") {
     return next();
   }
-  express.json({ limit: '10mb' })(req, res, next);
+  express.json({ limit: "10mb" })(req, res, next);
 });
 app.use(express.urlencoded({ extended: true }));
 
 // Permite CORS caso frontend e backend estejam em domínios ou portas diferentes
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  if (req.method === 'OPTIONS') {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+  );
+  if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
   next();
@@ -35,8 +41,8 @@ const PORT = 3000;
 const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
 
 // Credenciais seguras de administrador
-const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 // ==========================================
 // ROTEADOR DE ROTAS DA API
@@ -44,60 +50,74 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const apiRouter = express.Router();
 
 // Healthcheck
-apiRouter.get('/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+apiRouter.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // 1. Status das Credenciais do Gateway e Banco
-apiRouter.get('/gateways/config-status', (req, res) => {
-  const currentAppUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}` || appUrl;
+apiRouter.get("/gateways/config-status", (req, res) => {
+  const currentAppUrl =
+    process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
   const mercadoPago = mercadoPagoService.getConfigStatus(currentAppUrl);
   const supabase = {
     isConfigured: isSupabaseConfigured(),
-    url: process.env.SUPABASE_URL ? process.env.SUPABASE_URL.replace(/https?:\/\//, '').split('.')[0] + '...' : null
+    url: process.env.SUPABASE_URL
+      ? process.env.SUPABASE_URL.replace(/https?:\/\//, "").split(".")[0] +
+        "..."
+      : null,
   };
   res.json({ mercadoPago, supabase });
 });
 
 // 1.1 Rota de Teste e Diagnóstico Direto com o Supabase
-apiRouter.get('/supabase/test', testSupabaseConnection);
+apiRouter.get("/supabase/test", testSupabaseConnection);
 
 // 2. Lista de Cursos disponíveis (suporta ?includeInactive=true para o painel admin)
-apiRouter.get('/courses', (req, res) => {
-  const includeInactive = req.query.includeInactive === 'true';
+apiRouter.get("/courses", (req, res) => {
+  const includeInactive = req.query.includeInactive === "true";
   res.json(db.getCourses(includeInactive));
 });
 
 // 3. Obter curso por ID
-apiRouter.get('/courses/:id', (req, res) => {
+apiRouter.get("/courses/:id", (req, res) => {
   const course = db.getCourseById(req.params.id);
-  if (!course) return res.status(404).json({ error: 'Curso não encontrado.' });
+  if (!course) return res.status(404).json({ error: "Curso não encontrado." });
   res.json(course);
 });
 
 // 3.1 Atualizar curso (Preço de Custo, Lucro %, Preço de Venda, Status Ativo/Inativo, Propriedades)
-apiRouter.put('/courses/:id', (req, res) => {
+apiRouter.put("/courses/:id", (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const updatedCourse = db.updateCourse(id, updates);
   if (!updatedCourse) {
-    return res.status(404).json({ error: 'Curso não encontrado para atualização.' });
+    return res
+      .status(404)
+      .json({ error: "Curso não encontrado para atualização." });
   }
   res.json({ success: true, course: updatedCourse });
 });
 
 // 3.2 Cadastrar Novo Curso na Plataforma
-apiRouter.post('/courses', (req, res) => {
+apiRouter.post("/courses", (req, res) => {
   try {
     const newCourseData = req.body;
     if (!newCourseData.title || !newCourseData.category) {
-      return res.status(400).json({ error: 'Título e Categoria são obrigatórios.' });
+      return res
+        .status(400)
+        .json({ error: "Título e Categoria são obrigatórios." });
     }
     const created = db.createCourse(newCourseData);
     res.status(201).json({ success: true, course: created });
   } catch (err: any) {
-    console.error('Erro ao cadastrar curso:', err);
-    res.status(500).json({ error: err.message || 'Erro ao cadastrar novo curso.' });
+    console.error("Erro ao cadastrar curso:", err);
+    res
+      .status(500)
+      .json({ error: err.message || "Erro ao cadastrar novo curso." });
   }
 });
 
@@ -106,30 +126,32 @@ const handleToggleActive = (req: any, res: any) => {
   const { id } = req.params;
   const result = db.toggleCourseActive(id);
   if (!result.success) {
-    return res.status(404).json({ error: 'Curso não encontrado.' });
+    return res.status(404).json({ error: "Curso não encontrado." });
   }
   res.json({ success: true, isActive: result.isActive, course: result.course });
 };
-apiRouter.patch('/courses/:id/toggle-active', handleToggleActive);
-apiRouter.put('/courses/:id/toggle-active', handleToggleActive);
+apiRouter.patch("/courses/:id/toggle-active", handleToggleActive);
+apiRouter.put("/courses/:id/toggle-active", handleToggleActive);
 
 // 3.4 Excluir Curso
-apiRouter.delete('/courses/:id', (req, res) => {
+apiRouter.delete("/courses/:id", (req, res) => {
   const { id } = req.params;
   const success = db.deleteCourse(id);
   if (!success) {
-    return res.status(404).json({ error: 'Curso não encontrado para exclusão.' });
+    return res
+      .status(404)
+      .json({ error: "Curso não encontrado para exclusão." });
   }
-  res.json({ success: true, message: 'Curso excluído com sucesso.' });
+  res.json({ success: true, message: "Curso excluído com sucesso." });
 });
 
 // 3.5 Verificação Prévia de Cadastro do Aluno
-apiRouter.get('/students/check', async (req, res) => {
+apiRouter.get("/students/check", async (req, res) => {
   const cpf = req.query.cpf as string;
   const courseId = req.query.courseId as string;
 
   if (!cpf) {
-    return res.status(400).json({ error: 'CPF é obrigatório.' });
+    return res.status(400).json({ error: "CPF é obrigatório." });
   }
 
   try {
@@ -143,31 +165,34 @@ apiRouter.get('/students/check', async (req, res) => {
     return res.json({
       isRegistered: Boolean(student),
       student: student || null,
-      existingCourseOrder: existingOrder
+      existingCourseOrder: existingOrder,
     });
   } catch (err: any) {
-    console.error('Erro na checagem de aluno:', err);
+    console.error("Erro na checagem de aluno:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
 // 3.6 Portal do Aluno: Histórico Completo de Cursos por CPF com Autorização Obrigatória
-apiRouter.get('/student/portal', async (req, res) => {
+apiRouter.get("/student/portal", async (req, res) => {
   const cpf = req.query.cpf as string;
   if (!cpf) {
-    return res.status(400).json({ error: 'CPF é obrigatório para acessar o painel do aluno.' });
+    return res
+      .status(400)
+      .json({ error: "CPF é obrigatório para acessar o painel do aluno." });
   }
 
   try {
     const data = await db.getStudentPortalData(cpf);
-    
+
     if (!data.authorized) {
       return res.status(403).json({
         success: false,
         authorized: false,
-        error: 'Acesso não autorizado: CPF não encontrado no banco de dados Supabase nem no Painel Administrativo. A Área do Aluno é de acesso restrito a condutores cadastrados.',
+        error:
+          "Acesso não autorizado: CPF não encontrado no banco de dados Supabase nem no Painel Administrativo. A Área do Aluno é de acesso restrito a condutores cadastrados.",
         registeredInSupabase: data.registeredInSupabase,
-        registeredInAdmin: data.registeredInAdmin
+        registeredInAdmin: data.registeredInAdmin,
       });
     }
 
@@ -177,62 +202,71 @@ apiRouter.get('/student/portal', async (req, res) => {
       student: data.student,
       orders: data.orders,
       registeredInSupabase: data.registeredInSupabase,
-      registeredInAdmin: data.registeredInAdmin
+      registeredInAdmin: data.registeredInAdmin,
     });
   } catch (err: any) {
-    console.error('Erro ao verificar autorização do aluno:', err);
-    return res.status(500).json({ error: err.message || 'Erro ao consultar autorização no banco de dados' });
+    console.error("Erro ao verificar autorização do aluno:", err);
+    return res.status(500).json({
+      error: err.message || "Erro ao consultar autorização no banco de dados",
+    });
   }
 });
 
 // 4. Criar Pré-Matrícula e Gerar Pagamento Pix
-apiRouter.post('/pix/create', async (req, res) => {
+apiRouter.post("/pix/create", async (req, res) => {
   try {
-    const body = (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) || {};
-    const { 
-      courseId, 
-      customerName, 
-      customerEmail, 
-      customerCpf, 
-      customerWhatsapp = '',
-      customerBirthDate = '',
-      customerCnhNumber = '',
-      customerCnhCategory = '',
-      gateway = 'MERCADO_PAGO'
+    const body =
+      (typeof req.body === "string" ? JSON.parse(req.body) : req.body) || {};
+    const {
+      courseId,
+      customerName,
+      customerEmail,
+      customerCpf,
+      customerWhatsapp = "",
+      customerBirthDate = "",
+      customerCnhNumber = "",
+      customerCnhCategory = "",
+      gateway = "MERCADO_PAGO",
     } = body;
 
     if (!courseId || !customerName || !customerEmail || !customerCpf) {
-      return res.status(400).json({ 
-        error: 'Campos obrigatórios: Nome, E-mail, CPF e ID do Curso.' 
+      return res.status(400).json({
+        error: "Campos obrigatórios: Nome, E-mail, CPF e ID do Curso.",
       });
     }
 
     const course = db.getCourseById(courseId);
     if (!course) {
-      return res.status(404).json({ error: 'Curso selecionado não foi encontrado no catálogo.' });
+      return res
+        .status(404)
+        .json({ error: "Curso selecionado não foi encontrado no catálogo." });
     }
 
     // Prevenção de duplicidade: checar se já existe matrícula ou pedido para o mesmo curso e CPF
-    const existingOrder = await db.findActiveOrderByCpfAndCourse(customerCpf, courseId);
+    const existingOrder = await db.findActiveOrderByCpfAndCourse(
+      customerCpf,
+      courseId,
+    );
     if (existingOrder) {
-      if (existingOrder.status === 'PAID') {
+      if (existingOrder.status === "PAID") {
         return res.status(409).json({
           error: `Aluno já matriculado neste curso! O curso "${existingOrder.courseTitle}" já se encontra confirmado para este CPF.`,
-          code: 'ALREADY_ENROLLED_AND_PAID',
-          order: existingOrder
+          code: "ALREADY_ENROLLED_AND_PAID",
+          order: existingOrder,
         });
       } else {
         return res.status(409).json({
           error: `Já existe um pedido aberto para este curso com seu CPF. Você pode continuar o pagamento diretamente.`,
-          code: 'PENDING_ORDER_EXISTS',
-          order: existingOrder
+          code: "PENDING_ORDER_EXISTS",
+          order: existingOrder,
         });
       }
     }
 
     const orderId = `ped_${Date.now()}`;
-    const selectedGateway: PaymentGateway = 'MERCADO_PAGO';
-    const effectiveAppUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}` || appUrl;
+    const selectedGateway: PaymentGateway = "MERCADO_PAGO";
+    const effectiveAppUrl =
+      process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
 
     // 1. Geração Pix no Mercado Pago
     const mpResult = await mercadoPagoService.createPixPayment({
@@ -242,7 +276,7 @@ apiRouter.post('/pix/create', async (req, res) => {
       customerEmail,
       customerCpf,
       courseTitle: course.title,
-      appUrl: effectiveAppUrl
+      appUrl: effectiveAppUrl,
     });
 
     // 2. Geração da Preferência Checkout Pro (Cartão de Crédito até 12x, Débito e Pix)
@@ -254,14 +288,14 @@ apiRouter.post('/pix/create', async (req, res) => {
       customerCpf,
       customerPhone: customerWhatsapp,
       courseTitle: course.title,
-      appUrl: effectiveAppUrl
+      appUrl: effectiveAppUrl,
     });
 
     const order: Order = {
       id: orderId,
       txid: mpResult.paymentId,
       gateway: selectedGateway,
-      paymentMethod: 'PIX',
+      paymentMethod: "PIX",
       checkoutUrl: mpPreference.checkoutUrl,
       courseId: course.id,
       courseTitle: course.title,
@@ -275,13 +309,13 @@ apiRouter.post('/pix/create', async (req, res) => {
       customerCnhNumber,
       customerCnhCategory,
       amount: course.price,
-      status: 'PENDING',
-      statusMessage: 'Aguardando pagamento via Pix ou Cartão.',
+      status: "PENDING",
+      statusMessage: "Aguardando pagamento via Pix ou Cartão.",
       qrCodeUrl: mpResult.qrCodeUrl,
       pixCopiaECola: mpResult.pixCopiaECola,
       createdAt: new Date().toISOString(),
       mercadoPagoPaymentId: mpResult.paymentId,
-      accessDispatchedStatus: 'AGUARDANDO_ENVIO_MANUAL'
+      accessDispatchedStatus: "AGUARDANDO_ENVIO_MANUAL",
     };
 
     await db.createOrder(order);
@@ -289,25 +323,29 @@ apiRouter.post('/pix/create', async (req, res) => {
     return res.status(201).json({
       order,
       isRealApi: mpResult.isRealApi,
-      gateway: selectedGateway
+      gateway: selectedGateway,
     });
   } catch (error: any) {
-    console.error('Erro ao gerar cobrança de matrícula:', error);
-    return res.status(500).json({ error: error.message || 'Erro interno ao processar matrícula.' });
+    console.error("Erro ao gerar cobrança de matrícula:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Erro interno ao processar matrícula." });
   }
 });
 
 // 4.1 Recuperação de Pedido / 2ª Via por CPF
-apiRouter.get('/orders/lookup', async (req, res) => {
+apiRouter.get("/orders/lookup", async (req, res) => {
   const cpf = req.query.cpf as string;
   if (!cpf) {
-    return res.status(400).json({ error: 'CPF é obrigatório.' });
+    return res.status(400).json({ error: "CPF é obrigatório." });
   }
 
   try {
     const order = await db.getOrderByCpf(cpf);
     if (!order) {
-      return res.status(404).json({ error: 'Nenhum pedido encontrado para o CPF informado.' });
+      return res
+        .status(404)
+        .json({ error: "Nenhum pedido encontrado para o CPF informado." });
     }
     return res.json({ order });
   } catch (err: any) {
@@ -316,12 +354,12 @@ apiRouter.get('/orders/lookup', async (req, res) => {
 });
 
 // 4.2 Obter detalhes de pedido direto por ID
-apiRouter.get('/orders/:id', async (req, res) => {
+apiRouter.get("/orders/:id", async (req, res) => {
   const { id } = req.params;
   try {
     const order = await db.getOrderByIdAsync(id);
     if (!order) {
-      return res.status(404).json({ error: 'Matrícula não encontrada.' });
+      return res.status(404).json({ error: "Matrícula não encontrada." });
     }
     return res.json({ order });
   } catch (err: any) {
@@ -330,95 +368,117 @@ apiRouter.get('/orders/:id', async (req, res) => {
 });
 
 // 5. Consultar Status da Matrícula / Pagamento
-apiRouter.get('/pix/status/:txid', (req, res) => {
+apiRouter.get("/pix/status/:txid", async (req, res) => {
   const { txid } = req.params;
-  const order = db.getOrderByTxid(txid);
+  try {
+    const order = await db.getOrderByTxid(txid);
 
-  if (!order) {
-    return res.status(404).json({ error: 'Matrícula não encontrada.' });
+    if (!order) {
+      return res.status(404).json({ error: "Matrícula não encontrada." });
+    }
+
+    return res.json({ order });
+  } catch (err: any) {
+    console.error("Erro ao consultar status do pedido:", err);
+    return res.status(500).json({ error: err.message });
   }
-
-  return res.json({
-    order
-  });
 });
 
 // 6. Atualizar Status para Prevenção de Erros
-apiRouter.post('/orders/:orderId/status', (req, res) => {
+apiRouter.post("/orders/:orderId/status", (req, res) => {
   const { orderId } = req.params;
   const { status, statusMessage } = req.body;
 
   const order = db.updateOrderStatus(orderId, status, statusMessage);
-  if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
+  if (!order) return res.status(404).json({ error: "Pedido não encontrado." });
 
   res.json({ order });
 });
 
 // 7. WEBHOOK OFICIAL MERCADO PAGO
 const webhookPaths = [
-  '/webhooks/mercadopago',
-  '/webhook/mercadopago',
-  '/mercadopago/webhook',
-  '/mercadopago/webhooks'
+  "/webhooks/mercadopago",
+  "/webhook/mercadopago",
+  "/mercadopago/webhook",
+  "/mercadopago/webhooks",
 ];
 
 const handleWebhookGet = (req: express.Request, res: express.Response) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    message: 'Endpoint de Webhook do Mercado Pago ativo e pronto para receber notificações de pagamentos de cursos.',
+  res.status(200).json({
+    status: "OK",
+    message:
+      "Endpoint de Webhook do Mercado Pago ativo e pronto para receber notificações de pagamentos de cursos.",
     path: req.originalUrl,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 };
 
-const handleWebhookPost = async (req: express.Request, res: express.Response) => {
+const handleWebhookPost = async (
+  req: express.Request,
+  res: express.Response,
+) => {
   const payload = req.body || {};
   const query = req.query || {};
-  console.log('[WEBHOOK MERCADO PAGO RECEBIDO]', JSON.stringify({ body: payload, query }, null, 2));
+  console.log(
+    "[WEBHOOK MERCADO PAGO RECEBIDO]",
+    JSON.stringify({ body: payload, query }, null, 2),
+  );
 
   try {
-    const paymentId = payload?.data?.id || payload?.id || (query.topic === 'payment' ? query.id : null);
+    const paymentId =
+      payload?.data?.id ||
+      payload?.id ||
+      (query.topic === "payment" ? query.id : null);
 
-    const isMercadoPagoTest = 
-      payload?.live_mode === false || 
-      paymentId === '123456' || 
-      (payload?.action === 'payment.updated' && (!paymentId || paymentId === '123456'));
+    const isMercadoPagoTest =
+      payload?.live_mode === false ||
+      paymentId === "123456" ||
+      (payload?.action === "payment.updated" &&
+        (!paymentId || paymentId === "123456"));
 
     if (isMercadoPagoTest) {
-      console.log('[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:', payload);
+      console.log(
+        "[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:",
+        payload,
+      );
       db.addWebhookLog({
-        gateway: 'MERCADO_PAGO',
-        endpoint: req.originalUrl || '/api/webhooks/mercadopago',
-        txid: String(paymentId || 'TEST_123456'),
+        gateway: "MERCADO_PAGO",
+        endpoint: req.originalUrl || "/api/webhooks/mercadopago",
+        txid: String(paymentId || "TEST_123456"),
         statusCode: 200,
-        statusMessage: `Teste de Webhook do Mercado Pago validado com sucesso (Ação: ${payload.action || 'teste'}, Live Mode: ${payload.live_mode ?? false}).`,
-        rawPayload: { body: payload, query }
+        statusMessage: `Teste de Webhook do Mercado Pago validado com sucesso (Ação: ${payload.action || "teste"}, Live Mode: ${payload.live_mode ?? false}).`,
+        rawPayload: { body: payload, query },
       });
       return res.status(200).json({
-        status: 'OK',
-        message: 'Notificação de teste do Mercado Pago recebida e validada com sucesso.',
+        status: "OK",
+        message:
+          "Notificação de teste do Mercado Pago recebida e validada com sucesso.",
         received: true,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
     if (!paymentId) {
       db.addWebhookLog({
-        gateway: 'MERCADO_PAGO',
-        endpoint: req.originalUrl || '/api/webhooks/mercadopago',
-        txid: 'NO_PAYMENT_ID',
+        gateway: "MERCADO_PAGO",
+        endpoint: req.originalUrl || "/api/webhooks/mercadopago",
+        txid: "NO_PAYMENT_ID",
         statusCode: 200,
-        statusMessage: 'Notificação recebida sem ID direto de pagamento (ex: teste ou Merchant Order).',
-        rawPayload: { body: payload, query }
+        statusMessage:
+          "Notificação recebida sem ID direto de pagamento (ex: teste ou Merchant Order).",
+        rawPayload: { body: payload, query },
       });
-      return res.status(200).send('OK');
+      return res.status(200).send("OK");
     }
 
-    const mpDetails = await mercadoPagoService.getPaymentDetails(String(paymentId));
-    const externalReference = mpDetails?.external_reference || payload?.external_reference;
-    const mpStatus = mpDetails?.status || 'approved';
-    const paymentType = mpDetails?.payment_type_id || 'bank_transfer';
-    const paymentMethod = mpDetails?.payment_method_id || 'pix';
+    const mpDetails = await mercadoPagoService.getPaymentDetails(
+      String(paymentId),
+    );
+    const externalReference =
+      mpDetails?.external_reference || payload?.external_reference;
+    const mpStatus = mpDetails?.status || "approved";
+    const paymentType = mpDetails?.payment_type_id || "bank_transfer";
+    const paymentMethod = mpDetails?.payment_method_id || "pix";
 
     let foundOrder: Order | undefined;
     if (externalReference) {
@@ -429,14 +489,17 @@ const handleWebhookPost = async (req: express.Request, res: express.Response) =>
     }
 
     if (foundOrder) {
-      if (mpStatus === 'approved') {
-        let methodLabel: Order['paymentMethod'] = 'PIX';
-        if (paymentType === 'credit_card') methodLabel = 'CREDIT_CARD';
-        else if (paymentType === 'debit_card') methodLabel = 'DEBIT_CARD';
+      if (mpStatus === "approved") {
+        let methodLabel: Order["paymentMethod"] = "PIX";
+        if (paymentType === "credit_card") methodLabel = "CREDIT_CARD";
+        else if (paymentType === "debit_card") methodLabel = "DEBIT_CARD";
 
         foundOrder.paymentMethod = methodLabel;
 
-        const { order } = await db.markOrderAsPaid(foundOrder.id, String(paymentId));
+        const { order } = await db.markOrderAsPaid(
+          foundOrder.id,
+          String(paymentId),
+        );
 
         if (order) {
           order.paymentMethod = methodLabel;
@@ -446,91 +509,108 @@ const handleWebhookPost = async (req: express.Request, res: express.Response) =>
             customerWhatsapp: order.customerWhatsapp,
             courseTitle: order.courseTitle,
             orderId: order.id,
-            amount: order.amount
+            amount: order.amount,
           });
         }
 
         db.addWebhookLog({
-          gateway: 'MERCADO_PAGO',
-          endpoint: req.originalUrl || '/api/webhooks/mercadopago',
+          gateway: "MERCADO_PAGO",
+          endpoint: req.originalUrl || "/api/webhooks/mercadopago",
           txid: String(paymentId),
           amount: foundOrder.amount,
           statusCode: 200,
           statusMessage: `Pagamento #${paymentId} Aprovado (${paymentType.toUpperCase()} / ${paymentMethod.toUpperCase()}).`,
-          rawPayload: { body: payload, query, mpDetails }
+          rawPayload: { body: payload, query, mpDetails },
         });
 
-        return res.status(200).json({ status: 'PROCESSED', orderId: order?.id, method: methodLabel });
-      } else if (mpStatus === 'rejected') {
-        await db.updateOrderStatus(foundOrder.id, 'ERROR', 'Pagamento recusado pela operadora do cartão ou banco emissor.');
+        return res.status(200).json({
+          status: "PROCESSED",
+          orderId: order?.id,
+          method: methodLabel,
+        });
+      } else if (mpStatus === "rejected") {
+        await db.updateOrderStatus(
+          foundOrder.id,
+          "ERROR",
+          "Pagamento recusado pela operadora do cartão ou banco emissor.",
+        );
         db.addWebhookLog({
-          gateway: 'MERCADO_PAGO',
-          endpoint: req.originalUrl || '/api/webhooks/mercadopago',
+          gateway: "MERCADO_PAGO",
+          endpoint: req.originalUrl || "/api/webhooks/mercadopago",
           txid: String(paymentId),
           amount: foundOrder.amount,
           statusCode: 200,
-          statusMessage: `Pagamento #${paymentId} Recusado pelo Mercado Pago. Motivo: ${mpDetails?.status_detail || 'Recusado'}.`,
-          rawPayload: { body: payload, query, mpDetails }
+          statusMessage: `Pagamento #${paymentId} Recusado pelo Mercado Pago. Motivo: ${mpDetails?.status_detail || "Recusado"}.`,
+          rawPayload: { body: payload, query, mpDetails },
         });
-        return res.status(200).json({ status: 'REJECTED' });
+        return res.status(200).json({ status: "REJECTED" });
       } else {
         db.addWebhookLog({
-          gateway: 'MERCADO_PAGO',
-          endpoint: req.originalUrl || '/api/webhooks/mercadopago',
+          gateway: "MERCADO_PAGO",
+          endpoint: req.originalUrl || "/api/webhooks/mercadopago",
           txid: String(paymentId),
           amount: foundOrder.amount,
           statusCode: 200,
           statusMessage: `Pagamento #${paymentId} com status em andamento: ${mpStatus}.`,
-          rawPayload: { body: payload, query, mpDetails }
+          rawPayload: { body: payload, query, mpDetails },
         });
-        return res.status(200).send('OK');
+        return res.status(200).send("OK");
       }
     } else {
       db.addWebhookLog({
-        gateway: 'MERCADO_PAGO',
-        endpoint: req.originalUrl || '/api/webhooks/mercadopago',
+        gateway: "MERCADO_PAGO",
+        endpoint: req.originalUrl || "/api/webhooks/mercadopago",
         txid: String(paymentId),
         statusCode: 200,
         statusMessage: `Aviso: Pedido não encontrado no banco para pagamento #${paymentId}.`,
-        rawPayload: { body: payload, query }
+        rawPayload: { body: payload, query },
       });
-      return res.status(200).send('OK');
+      return res.status(200).send("OK");
     }
   } catch (error: any) {
-    console.error('Erro ao processar Webhook Mercado Pago:', error);
+    console.error("Erro ao processar Webhook Mercado Pago:", error);
     db.addWebhookLog({
-      gateway: 'MERCADO_PAGO',
-      endpoint: req.originalUrl || '/api/webhooks/mercadopago',
-      txid: 'ERROR',
+      gateway: "MERCADO_PAGO",
+      endpoint: req.originalUrl || "/api/webhooks/mercadopago",
+      txid: "ERROR",
       statusCode: 500,
       statusMessage: `Erro: ${error.message}`,
-      rawPayload: { body: payload, query }
+      rawPayload: { body: payload, query },
     });
     return res.status(500).json({ error: error.message });
   }
 };
 
-webhookPaths.forEach(p => {
+webhookPaths.forEach((p) => {
   apiRouter.get(p, handleWebhookGet);
   apiRouter.post(p, handleWebhookPost);
   apiRouter.head(p, (req, res) => res.status(200).end());
 });
 
 // 8. SIMULADOR DE PAGAMENTO
-apiRouter.post('/simulador/pagar-pix', async (req, res) => {
+apiRouter.post("/simulador/pagar-pix", async (req, res) => {
   const { txid } = req.body;
-  const order = db.getOrderByTxid(txid);
+  const order = await db.getOrderByTxid(txid); // <-- await adicionado
 
   if (!order) {
-    return res.status(404).json({ error: 'Pedido não encontrado para o txid informado.' });
+    return res
+      .status(404)
+      .json({ error: "Pedido não encontrado para o txid informado." });
   }
 
-  if (order.status === 'PAID') {
-    return res.json({ message: 'Pedido já se encontra marcado como PAGO.', order });
+  if (order.status === "PAID") {
+    return res.json({
+      message: "Pedido já se encontra marcado como PAGO.",
+      order,
+    });
   }
 
-  const simulatedMpPaymentId = order.mercadoPagoPaymentId || `998877${Date.now()}`;
-  const { order: paidOrder } = await db.markOrderAsPaid(order.id, simulatedMpPaymentId);
+  const simulatedMpPaymentId =
+    order.mercadoPagoPaymentId || `998877${Date.now()}`;
+  const { order: paidOrder } = await db.markOrderAsPaid(
+    order.id,
+    simulatedMpPaymentId,
+  );
 
   if (paidOrder) {
     notificationService.sendPaymentConfirmedNotification({
@@ -539,72 +619,89 @@ apiRouter.post('/simulador/pagar-pix', async (req, res) => {
       customerWhatsapp: paidOrder.customerWhatsapp,
       courseTitle: paidOrder.courseTitle,
       orderId: paidOrder.id,
-      amount: paidOrder.amount
+      amount: paidOrder.amount,
     });
   }
 
   db.addWebhookLog({
-    gateway: 'MERCADO_PAGO',
-    endpoint: '/api/webhooks/mercadopago (Simulador)',
+    gateway: "MERCADO_PAGO",
+    endpoint: "/api/webhooks/mercadopago (Simulador)",
     txid: String(simulatedMpPaymentId),
     amount: order.amount,
     statusCode: 200,
     statusMessage: `Simulação de Pagamento: Pedido ${order.id} confirmado. Aluno notificado.`,
-    rawPayload: { simulated: true, txid, orderId: order.id }
+    rawPayload: { simulated: true, txid, orderId: order.id },
   });
 
   return res.json({
     success: true,
-    message: 'Pagamento confirmado e notificação enviada!',
-    order: db.getOrderByTxid(order.id)
+    message: "Pagamento confirmado e notificação enviada!",
+    order: await db.getOrderByTxid(order.id), // <-- await adicionado
   });
 });
 
 // 9. ADMIN: Login
-apiRouter.post('/admin/login', (req, res) => {
+apiRouter.post("/admin/login", (req, res) => {
   const { username, password } = req.body;
   if (username === ADMIN_USER && password === ADMIN_PASSWORD) {
-    const token = `adm_session_${Buffer.from(`${username}:${Date.now()}`).toString('base64')}`;
-    return res.json({ 
-      authenticated: true, 
+    const token = `adm_session_${Buffer.from(`${username}:${Date.now()}`).toString("base64")}`;
+    return res.json({
+      authenticated: true,
       token,
       username: ADMIN_USER,
-      message: 'Autenticação de administrador realizada com sucesso.' 
+      message: "Autenticação de administrador realizada com sucesso.",
     });
   }
-  return res.status(401).json({ error: 'Usuário ou senha de administrador incorretos.' });
+  return res
+    .status(401)
+    .json({ error: "Usuário ou senha de administrador incorretos." });
 });
 
 // Middleware de checagem para rotas protegidas
-const requireAdminAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const requireAdminAuth = (
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer adm_session_')) {
-    return res.status(401).json({ error: 'Acesso restrito. Faça login como administrador.' });
+  if (!authHeader || !authHeader.startsWith("Bearer adm_session_")) {
+    return res
+      .status(401)
+      .json({ error: "Acesso restrito. Faça login como administrador." });
   }
   next();
 };
 
 // Marcar Acesso como Enviado Manualmente (Admin Protegido)
-apiRouter.post('/admin/orders/:orderId/mark-dispatched', requireAdminAuth, (req, res) => {
-  const { orderId } = req.params;
-  const order = db.markAccessAsDispatched(orderId);
-  if (!order) return res.status(404).json({ error: 'Pedido não encontrado.' });
-  res.json({ order, message: 'Status atualizado para: Acesso Enviado Manualmente.' });
-});
+apiRouter.post(
+  "/admin/orders/:orderId/mark-dispatched",
+  requireAdminAuth,
+  (req, res) => {
+    const { orderId } = req.params;
+    const order = db.markAccessAsDispatched(orderId);
+    if (!order)
+      return res.status(404).json({ error: "Pedido não encontrado." });
+    res.json({
+      order,
+      message: "Status atualizado para: Acesso Enviado Manualmente.",
+    });
+  },
+);
 
 // Painel Admin: Visão Geral (Admin Protegido)
-apiRouter.get('/admin/overview', requireAdminAuth, async (req, res) => {
+apiRouter.get("/admin/overview", requireAdminAuth, async (req, res) => {
   const orders = await db.getAllOrdersAsync();
   const webhookLogs = db.getWebhookLogs();
-  const effectiveAppUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}` || appUrl;
+  const effectiveAppUrl =
+    process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
   const mpConfig = mercadoPagoService.getConfigStatus(effectiveAppUrl);
 
   res.json({
     orders,
     webhookLogs,
     configStatus: {
-      mercadoPago: mpConfig
-    }
+      mercadoPago: mpConfig,
+    },
   });
 });
 
@@ -612,7 +709,7 @@ apiRouter.get('/admin/overview', requireAdminAuth, async (req, res) => {
 // REGISTRO DUPLO: Suporta tanto requisições para /api/... quanto para /...
 // Isso garante compatibilidade 100% com Vercel Serverless Functions e Express local!
 // ==========================================
-app.use('/api', apiRouter);
-app.use('/', apiRouter);
+app.use("/api", apiRouter);
+app.use("/", apiRouter);
 
 export default app;
