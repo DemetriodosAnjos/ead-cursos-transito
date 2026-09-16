@@ -56,7 +56,8 @@ const StudentPortalModal = React.lazy(() =>
 );
 
 export default function App() {
-  const [courses, setCourses] = useState<Course[]>(COURSES);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
@@ -103,10 +104,15 @@ export default function App() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             setCourses(data);
+          } else {
+            setCourses(COURSES); // fallback: se a API não retornar nada, usa o local
           }
+        } else {
+          setCourses(COURSES); // fallback: se a API falhar (500, etc.), usa o local
         }
       } catch (err) {
         console.log("Usando catálogo local");
+        setCourses(COURSES); // fallback: erro de rede, usa o local
       }
     };
     fetchCourses();
