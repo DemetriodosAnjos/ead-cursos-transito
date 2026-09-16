@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR" class="dark" style="background-color: #09090b; color-scheme: dark;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vitrine Cursos EAD DETRAN - Catálogo & Checkout</title>
+    <meta name="description" content="Vitrine estilo catálogo streaming dark para cursos especializados de trânsito e condutores, com pré-matrícula CNH, checkout Pix Mercado Pago e acompanhamento de status." />
+    <meta property="og:title" content="Vitrine Cursos EAD DETRAN - Catálogo & Checkout" />
+    <meta property="og:description" content="Vitrine estilo catálogo streaming dark para cursos especializados de trânsito e condutores, com pré-matrícula CNH, checkout Pix Mercado Pago e acompanhamento de status." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Estilo Crítico Inline para Eliminar 100% da Tela Branca Imediatamente (Zero FCP Delay) -->
+    <style>
+      html, body {
+        background-color: #09090b !important;
+        color: #f4f4f5;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      @keyframes pulse-shimmer {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 0.25; }
+      }
+      .skeleton-pulse {
+        animation: pulse-shimmer 1.5s ease-in-out infinite;
+      }
+    </style>
+
+    <!-- Fontes do Google carregadas de forma assíncrona (não-bloqueante) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+    </noscript>
+  </head>
+  <body class="bg-zinc-950 text-zinc-100 font-sans antialiased selection:bg-red-600 selection:text-white">
+    <!-- Shell Skeleton Pré-Renderizado (Exibido nos primeiros milissegundos antes do React hidratar) -->
+    <div id="root">
+      <div style="min-height: 100vh; background-color: #09090b; display: flex; flex-direction: column;">
+        <!-- Header Skeleton -->
+        <header style="height: 64px; border-bottom: 1px solid rgba(39, 39, 42, 0.6); display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; background: rgba(9, 9, 11, 0.95);">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 32px; height: 32px; border-radius: 6px; background-color: #dc2626; display: flex; align-items: center; justify-content: center; font-weight: 900; color: white; font-size: 13px;">EAD</div>
+            <div style="display: flex; flex-direction: column;">
+              <span style="font-weight: 900; font-size: 16px; color: #ffffff; letter-spacing: -0.5px;">DETRAN<span style="color: #ef4444;">PR</span></span>
+              <span style="font-size: 9px; color: #a1a1aa; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">Cursos Especializados</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="skeleton-pulse" style="width: 140px; height: 32px; border-radius: 20px; background-color: #27272a;"></div>
+          </div>
+        </header>
+
+        <!-- Hero Skeleton -->
+        <div style="max-w-7xl; padding: 2rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+          <div class="skeleton-pulse" style="width: 180px; height: 24px; border-radius: 6px; background-color: #18181b;"></div>
+          <div class="skeleton-pulse" style="max-width: 550px; height: 44px; border-radius: 8px; background-color: #27272a;"></div>
+          <div class="skeleton-pulse" style="max-width: 420px; height: 20px; border-radius: 6px; background-color: #18181b;"></div>
+          <div style="display: flex; gap: 12px; margin-top: 1rem;">
+            <div class="skeleton-pulse" style="width: 160px; height: 42px; border-radius: 8px; background-color: #dc2626; opacity: 0.8;"></div>
+            <div class="skeleton-pulse" style="width: 140px; height: 42px; border-radius: 8px; background-color: #27272a;"></div>
+          </div>
+          <!-- Indicador de Inicialização Rápida -->
+          <div style="margin-top: 2rem; display: flex; align-items: center; gap: 8px; color: #a1a1aa; font-size: 12px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: #22c55e;"></span>
+            Carregando catálogo oficial e cursos homologados...
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

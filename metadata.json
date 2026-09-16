@@ -1,0 +1,6 @@
+{
+  "name": "Vitrine Cursos EAD DETRAN - Catálogo & Checkout",
+  "description": "Vitrine estilo catálogo streaming dark para cursos especializados de trânsito e condutores, com pré-matrícula CNH, checkout Pix Mercado Pago e acompanhamento de status.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
