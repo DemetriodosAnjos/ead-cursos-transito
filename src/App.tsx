@@ -154,18 +154,29 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        // Se for duplicidade ou pedido pendente já existente
-        if (res.status === 409 && errData.order) {
-          setIsRegistrationOpen(false);
-          setCurrentOrder(errData.order);
-          setIsPaymentOpen(true);
-          return;
+        let errMessage = 'Erro ao processar matrícula.';
+        try {
+          const errData = await res.json();
+          // Se for duplicidade ou pedido pendente já existente
+          if (res.status === 409 && errData.order) {
+            setIsRegistrationOpen(false);
+            setCurrentOrder(errData.order);
+            setIsPaymentOpen(true);
+            return;
+          }
+          errMessage = errData.error || errMessage;
+        } catch {
+          errMessage = `Servidor retornou status ${res.status} (${res.statusText || 'Não encontrado'}). Verifique se o backend na Vercel está ativo.`;
         }
-        throw new Error(errData.error || 'Erro ao processar matrícula.');
+        throw new Error(errMessage);
       }
 
-      const resData = await res.json();
+      let resData;
+      try {
+        resData = await res.json();
+      } catch {
+        throw new Error('Resposta inválida recebida do servidor. Por favor, tente novamente.');
+      }
       setCurrentOrder(resData.order);
       if (data.cpf) {
         const clean = data.cpf.replace(/\D/g, '');
