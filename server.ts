@@ -27,6 +27,10 @@ async function startServer() {
   // ROTAS DA API
   // ==========================================
 
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime() });
+  });
+
   // 1. Status das Credenciais do Gateway e Banco
   app.get('/api/gateways/config-status', (req, res) => {
     const mercadoPago = mercadoPagoService.getConfigStatus(appUrl);
@@ -40,9 +44,10 @@ async function startServer() {
   // 1.1 Rota de Teste e Diagnóstico Direto com o Supabase
   app.get('/api/supabase/test', testSupabaseConnection);
 
-  // 2. Lista de Cursos disponíveis (28 cursos)
+  // 2. Lista de Cursos disponíveis (suporta ?includeInactive=true para o painel admin)
   app.get('/api/courses', (req, res) => {
-    res.json(db.getCourses());
+    const includeInactive = req.query.includeInactive === 'true';
+    res.json(db.getCourses(includeInactive));
   });
 
   // 3. Obter curso por ID
@@ -50,6 +55,54 @@ async function startServer() {
     const course = db.getCourseById(req.params.id);
     if (!course) return res.status(404).json({ error: 'Curso não encontrado.' });
     res.json(course);
+  });
+
+  // 3.1 Atualizar curso (Preço de Custo, Lucro %, Preço de Venda, Status Ativo/Inativo, Propriedades)
+  app.put('/api/courses/:id', (req, res) => {
+    const { id } = req.params;
+    const updates = req.body;
+    const updatedCourse = db.updateCourse(id, updates);
+    if (!updatedCourse) {
+      return res.status(404).json({ error: 'Curso não encontrado para atualização.' });
+    }
+    res.json({ success: true, course: updatedCourse });
+  });
+
+  // 3.2 Cadastrar Novo Curso na Plataforma
+  app.post('/api/courses', (req, res) => {
+    try {
+      const newCourseData = req.body;
+      if (!newCourseData.title || !newCourseData.category) {
+        return res.status(400).json({ error: 'Título e Categoria são obrigatórios.' });
+      }
+      const created = db.createCourse(newCourseData);
+      res.status(201).json({ success: true, course: created });
+    } catch (err: any) {
+      console.error('Erro ao cadastrar curso:', err);
+      res.status(500).json({ error: err.message || 'Erro ao cadastrar novo curso.' });
+    }
+  });
+
+  // 3.3 Alternar Status Ativo / Inativo (Ocultar da Vitrine)
+  const handleToggleActive = (req: any, res: any) => {
+    const { id } = req.params;
+    const result = db.toggleCourseActive(id);
+    if (!result.success) {
+      return res.status(404).json({ error: 'Curso não encontrado.' });
+    }
+    res.json({ success: true, isActive: result.isActive, course: result.course });
+  };
+  app.patch('/api/courses/:id/toggle-active', handleToggleActive);
+  app.put('/api/courses/:id/toggle-active', handleToggleActive);
+
+  // 3.4 Excluir Curso
+  app.delete('/api/courses/:id', (req, res) => {
+    const { id } = req.params;
+    const success = db.deleteCourse(id);
+    if (!success) {
+      return res.status(404).json({ error: 'Curso não encontrado para exclusão.' });
+    }
+    res.json({ success: true, message: 'Curso excluído com sucesso.' });
   });
 
   // 3.5 Verificação Prévia de Cadastro do Aluno (UX: Prevenção de duplicidade e aviso 'Usuário já cadastrado')

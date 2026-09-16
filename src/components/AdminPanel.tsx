@@ -22,9 +22,11 @@ import {
   Mail,
   Phone,
   Search,
-  FileText
+  FileText,
+  GraduationCap
 } from 'lucide-react';
-import { Order, WebhookLog } from '../types';
+import { Order, WebhookLog, Course } from '../types';
+import { AdminCoursesTable } from './AdminCoursesTable';
 
 // Formatador de CPF: 000.000.000-00
 const formatCPF = (val?: string) => {
@@ -109,7 +111,15 @@ const CopyField: React.FC<CopyFieldProps> = ({
   );
 };
 
-export const AdminPanel: React.FC = () => {
+interface AdminPanelProps {
+  courses?: Course[];
+  onCoursesUpdated?: (courses: Course[]) => void;
+}
+
+export const AdminPanel: React.FC<AdminPanelProps> = ({
+  courses: propCourses,
+  onCoursesUpdated: propOnCoursesUpdated
+}) => {
   // Estado de Autenticação para Produção
   const [authToken, setAuthToken] = useState<string | null>(() => {
     return localStorage.getItem('admin_token') || null;
@@ -118,6 +128,44 @@ export const AdminPanel: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Seção Ativa: Cursos & Preços por padrão, Matrículas ou Logs
+  const [activeSection, setActiveSection] = useState<'courses' | 'orders' | 'logs'>('courses');
+
+  // Gerenciamento dos Cursos
+  const [courses, setCourses] = useState<Course[]>(propCourses || []);
+
+  useEffect(() => {
+    if (propCourses && propCourses.length > 0) {
+      setCourses(propCourses);
+    }
+  }, [propCourses]);
+
+  const handleCoursesUpdated = (updated: Course[]) => {
+    setCourses(updated);
+    if (propOnCoursesUpdated) {
+      propOnCoursesUpdated(updated);
+    }
+    window.dispatchEvent(new CustomEvent('courses-updated', { detail: updated }));
+  };
+
+  const fetchAdminCourses = async () => {
+    try {
+      const res = await fetch('/api/courses?includeInactive=true');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          handleCoursesUpdated(data);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao buscar cursos admin:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminCourses();
+  }, []);
 
   // Estados de dados
   const [orders, setOrders] = useState<Order[]>([]);
@@ -384,7 +432,68 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabela de Matrículas & Pedidos */}
+      {/* Abas de Navegação Principal do Admin */}
+      <div className="flex items-center gap-2 border-b border-zinc-800 pb-2 overflow-x-auto scrollbar-none">
+        <button
+          id="tab-section-courses"
+          onClick={() => setActiveSection('courses')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+            activeSection === 'courses'
+              ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-950/50'
+              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" />
+          <span>Gestão de Cursos & Preços</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 font-mono">
+            {courses.length}
+          </span>
+        </button>
+
+        <button
+          id="tab-section-orders"
+          onClick={() => setActiveSection('orders')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+            activeSection === 'orders'
+              ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-950/50'
+              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Matrículas & Alunos CNH</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 font-mono">
+            {orders.length}
+          </span>
+        </button>
+
+        <button
+          id="tab-section-logs"
+          onClick={() => setActiveSection('logs')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+            activeSection === 'logs'
+              ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-950/50'
+              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span>Terminal de Webhooks</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/40 font-mono">
+            {logs.length}
+          </span>
+        </button>
+      </div>
+
+      {/* SEÇÃO 1: GESTÃO DE CURSOS E PRECIFICAÇÃO (COMPONENTE SOLICITADO) */}
+      {activeSection === 'courses' && (
+        <AdminCoursesTable 
+          courses={courses} 
+          onCoursesUpdated={handleCoursesUpdated} 
+          authToken={authToken} 
+        />
+      )}
+
+      {/* SEÇÃO 2: MATRÍCULAS E ALUNOS CNH */}
+      {activeSection === 'orders' && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
         <div className="p-4 border-b border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div>
@@ -660,8 +769,10 @@ export const AdminPanel: React.FC = () => {
           </table>
         </div>
       </div>
+      )}
 
-      {/* Terminal de Webhooks */}
+      {/* SEÇÃO 3: AUDITORIA DE WEBHOOKS */}
+      {activeSection === 'logs' && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
         <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -725,6 +836,7 @@ export const AdminPanel: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

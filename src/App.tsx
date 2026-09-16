@@ -86,10 +86,22 @@ export default function App() {
       }
     };
     fetchCourses();
+
+    const handleCoursesEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail && Array.isArray(customEvt.detail)) {
+        setCourses(customEvt.detail);
+      }
+    };
+    window.addEventListener('courses-updated', handleCoursesEvent);
+    return () => window.removeEventListener('courses-updated', handleCoursesEvent);
   }, []);
 
   // Filtro de cursos
   const filteredCourses = courses.filter((c) => {
+    // Requisito 5: Inativar / Ocultar card do curso na plataforma
+    if (c.isActive === false) return false;
+
     const matchesCategory = selectedCategory === 'all' || c.category === selectedCategory;
     const matchesSearch = 
       c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -98,7 +110,7 @@ export default function App() {
     return matchesCategory && matchesSearch;
   });
 
-  const featuredCourse = courses.find((c) => c.isFeatured) || courses[0];
+  const featuredCourse = courses.find((c) => c.isFeatured && c.isActive !== false) || courses.find((c) => c.isActive !== false);
 
   // Abertura do Modal de Matrícula
   const handleStartEnrollment = (course: Course, initialCpf?: string) => {
@@ -526,7 +538,7 @@ export default function App() {
                 <span className="text-sm font-medium">Carregando Painel Administrativo...</span>
               </div>
             }>
-              <AdminPanel />
+              <AdminPanel courses={courses} onCoursesUpdated={setCourses} />
             </Suspense>
           </div>
         ) : (

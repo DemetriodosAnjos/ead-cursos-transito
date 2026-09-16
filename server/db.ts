@@ -5,6 +5,17 @@ import { getSupabase } from './supabase';
 class Database {
   private orders: Map<string, Order> = new Map();
   private webhookLogs: WebhookLog[] = [];
+  private courses: Course[] = COURSES.map(c => {
+    // Definir custo e margem calculada padrão para inicialização
+    const costPrice = c.costPrice ?? (c.price <= 120 ? 50 : c.price <= 150 ? 65 : 70);
+    const profitPercent = c.profitPercent ?? (costPrice > 0 ? Number((((c.price - costPrice) / costPrice) * 100).toFixed(1)) : 100);
+    return {
+      ...c,
+      costPrice,
+      profitPercent,
+      isActive: c.isActive !== false
+    };
+  });
 
   constructor() {
     this.initSupabaseSeed();
@@ -19,7 +30,7 @@ class Database {
       const { data, error } = await supabase.from('courses').select('id').limit(1);
       if (!error && (!data || data.length === 0)) {
         console.log('[SUPABASE] Semeando catálogo de 28 cursos...');
-        const coursesToInsert = COURSES.map(c => ({
+        const coursesToInsert = this.courses.map(c => ({
           id: c.id,
           title: c.title,
           subtitle: c.subtitle,
@@ -48,12 +59,107 @@ class Database {
     }
   }
 
-  getCourses(): Course[] {
-    return COURSES;
+  getCourses(includeInactive: boolean = false): Course[] {
+    if (includeInactive) {
+      return [...this.courses];
+    }
+    return this.courses.filter(c => c.isActive !== false);
   }
 
   getCourseById(id: string): Course | undefined {
-    return COURSES.find(c => c.id === id);
+    return this.courses.find(c => c.id === id);
+  }
+
+  updateCourse(id: string, updates: Partial<Course>): Course | null {
+    const idx = this.courses.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+
+    const current = this.courses[idx];
+    const updated: Course = {
+      ...current,
+      ...updates
+    };
+
+    // Recalcular coerência entre custo, lucro e venda caso aplicável
+    if (updates.costPrice !== undefined || updates.price !== undefined || updates.profitPercent !== undefined) {
+      const cost = updated.costPrice ?? current.costPrice ?? 0;
+      if (updates.profitPercent !== undefined && updates.price === undefined) {
+        // Lucro % informado manualmente -> recalcula preço de venda
+        const profit = updates.profitPercent;
+        updated.price = cost > 0 ? Number((cost * (1 + profit / 100)).toFixed(2)) : cost;
+      } else if (updates.price !== undefined && updates.profitPercent === undefined) {
+        // Preço de venda informado manualmente -> recalcula percentual de lucro
+        const price = updates.price;
+        updated.profitPercent = cost > 0 ? Number((((price - cost) / cost) * 100).toFixed(1)) : 0;
+      } else if (updates.costPrice !== undefined && updates.price === undefined && updates.profitPercent === undefined) {
+        // Custo atualizado -> recalcula preço baseado no lucro existente
+        const profit = updated.profitPercent ?? 0;
+        updated.price = cost > 0 ? Number((cost * (1 + profit / 100)).toFixed(2)) : cost;
+      }
+    }
+
+    this.courses[idx] = updated;
+    console.log(`[DB] Curso atualizado: ${id} | Preço: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`);
+    return updated;
+  }
+
+  createCourse(newCourse: Course): Course {
+    let id = newCourse.id ? newCourse.id.trim() : '';
+    if (!id) {
+      id = newCourse.title
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+
+    if (this.courses.some(c => c.id === id)) {
+      id = `${id}-${Date.now().toString().slice(-4)}`;
+    }
+
+    const costPrice = newCourse.costPrice ?? 60;
+    let price = newCourse.price ?? 169;
+    let profitPercent = newCourse.profitPercent;
+
+    if (profitPercent !== undefined && newCourse.price === undefined) {
+      price = costPrice > 0 ? Number((costPrice * (1 + profitPercent / 100)).toFixed(2)) : costPrice;
+    } else if (profitPercent === undefined) {
+      profitPercent = costPrice > 0 ? Number((((price - costPrice) / costPrice) * 100).toFixed(1)) : 0;
+    }
+
+    const course: Course = {
+      ...newCourse,
+      id,
+      costPrice,
+      profitPercent,
+      price,
+      isActive: newCourse.isActive !== false,
+      requirements: Array.isArray(newCourse.requirements) ? newCourse.requirements : [],
+      modules: Array.isArray(newCourse.modules) ? newCourse.modules : []
+    };
+
+    this.courses.unshift(course);
+    console.log(`[DB] Novo curso cadastrado com sucesso: [${course.id}] ${course.title} (Preço: R$ ${course.price})`);
+    return course;
+  }
+
+  toggleCourseActive(id: string): { success: boolean; isActive: boolean; course?: Course } {
+    const course = this.courses.find(c => c.id === id);
+    if (!course) return { success: false, isActive: false };
+    course.isActive = course.isActive === false ? true : false;
+    console.log(`[DB] Status do curso [${id}] alterado para: ${course.isActive ? 'ATIVO' : 'INATIVO/OCULTO'}`);
+    return { success: true, isActive: course.isActive, course };
+  }
+
+  deleteCourse(id: string): boolean {
+    const initialLen = this.courses.length;
+    this.courses = this.courses.filter(c => c.id !== id);
+    const removed = this.courses.length < initialLen;
+    if (removed) {
+      console.log(`[DB] Curso removido: ${id}`);
+    }
+    return removed;
   }
 
   async createOrder(order: Order): Promise<Order> {

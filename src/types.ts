@@ -8,6 +8,9 @@ export interface Course {
   description: string;
   fullDescription: string;
   price: number;
+  costPrice?: number;
+  profitPercent?: number;
+  isActive?: boolean;
   duration: string;
   workloadHours: number;
   detranApproval: string;
