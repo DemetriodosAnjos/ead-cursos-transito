@@ -10,6 +10,7 @@ import { Order, PaymentGateway } from "../src/types";
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1);
 
 // Suporte a parsing de JSON tolerante a ambientes serverless (Vercel) e Express tradicional
 app.use((req, res, next) => {
