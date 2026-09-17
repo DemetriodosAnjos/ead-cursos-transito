@@ -616,7 +616,9 @@ function getCpfVariations(cpf) {
   if (clean) set.add(clean);
   if (cpf && cpf.trim()) set.add(cpf.trim());
   if (clean.length === 11) {
-    set.add(`${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`);
+    set.add(
+      `${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`
+    );
   }
   return Array.from(set).filter(Boolean);
 }
@@ -665,7 +667,9 @@ var Database = class {
   async initSupabaseCourses() {
     const supabase = await getSupabase();
     if (!supabase) {
-      console.warn("[SUPABASE] N\xE3o conectado. Usando cat\xE1logo est\xE1tico como conting\xEAncia.");
+      console.warn(
+        "[SUPABASE] N\xE3o conectado. Usando cat\xE1logo est\xE1tico como conting\xEAncia."
+      );
       this.courses = COURSES.map((c) => ({
         ...c,
         isActive: c.isActive !== false
@@ -676,9 +680,13 @@ var Database = class {
       const { data, error } = await supabase.from("courses").select("*").order("id");
       if (!error && data && data.length > 0) {
         this.courses = data.map((r) => this.mapSupabaseRowToCourse(r));
-        console.log(`[SUPABASE] Cat\xE1logo de ${this.courses.length} cursos sincronizado exclusivamente do Supabase PostgreSQL.`);
+        console.log(
+          `[SUPABASE] Cat\xE1logo de ${this.courses.length} cursos sincronizado exclusivamente do Supabase PostgreSQL.`
+        );
       } else if (!error && (!data || data.length === 0)) {
-        console.log("[SUPABASE] Tabela courses vazia. Semeando cat\xE1logo inicial...");
+        console.log(
+          "[SUPABASE] Tabela courses vazia. Semeando cat\xE1logo inicial..."
+        );
         const coursesToInsert = COURSES.map((c) => ({
           id: c.id,
           title: c.title,
@@ -704,7 +712,9 @@ var Database = class {
           is_active: c.isActive !== false
         }));
         await supabase.from("courses").upsert(coursesToInsert);
-        this.courses = coursesToInsert.map((r) => this.mapSupabaseRowToCourse(r));
+        this.courses = coursesToInsert.map(
+          (r) => this.mapSupabaseRowToCourse(r)
+        );
         console.log("[SUPABASE] 28 cursos semeados no Supabase.");
       }
     } catch (err) {
@@ -746,7 +756,10 @@ var Database = class {
           return course;
         }
       } catch (err) {
-        console.warn(`[SUPABASE] Erro ao buscar curso [${id}] em tempo real:`, err);
+        console.warn(
+          `[SUPABASE] Erro ao buscar curso [${id}] em tempo real:`,
+          err
+        );
       }
     }
     return this.courses.find((c) => c.id === id);
@@ -786,24 +799,37 @@ var Database = class {
         if (updates.subtitle !== void 0) payload.subtitle = updated.subtitle;
         if (updates.acronym !== void 0) payload.acronym = updated.acronym;
         if (updates.category !== void 0) payload.category = updated.category;
-        if (updates.categoryLabel !== void 0) payload.category_label = updated.categoryLabel;
-        if (updates.description !== void 0) payload.description = updated.description;
-        if (updates.fullDescription !== void 0) payload.full_description = updated.fullDescription;
+        if (updates.categoryLabel !== void 0)
+          payload.category_label = updated.categoryLabel;
+        if (updates.description !== void 0)
+          payload.description = updated.description;
+        if (updates.fullDescription !== void 0)
+          payload.full_description = updated.fullDescription;
         if (updates.duration !== void 0) payload.duration = updated.duration;
-        if (updates.workloadHours !== void 0) payload.workload_hours = updated.workloadHours;
-        if (updates.detranApproval !== void 0) payload.detran_approval = updated.detranApproval;
+        if (updates.workloadHours !== void 0)
+          payload.workload_hours = updated.workloadHours;
+        if (updates.detranApproval !== void 0)
+          payload.detran_approval = updated.detranApproval;
         if (updates.modality !== void 0) payload.modality = updated.modality;
-        if (updates.thumbnail !== void 0) payload.thumbnail = updated.thumbnail;
+        if (updates.thumbnail !== void 0)
+          payload.thumbnail = updated.thumbnail;
         if (updates.backdrop !== void 0) payload.backdrop = updated.backdrop;
         if (updates.badge !== void 0) payload.badge = updated.badge;
-        if (updates.requirements !== void 0) payload.requirements = updated.requirements;
+        if (updates.requirements !== void 0)
+          payload.requirements = updated.requirements;
         if (updates.modules !== void 0) payload.modules = updated.modules;
-        if (updates.isFeatured !== void 0) payload.is_featured = updated.isFeatured;
+        if (updates.isFeatured !== void 0)
+          payload.is_featured = updated.isFeatured;
         const { error } = await supabase.from("courses").update(payload).eq("id", id);
         if (error) {
-          console.error(`[SUPABASE] Erro ao atualizar curso [${id}]:`, error.message);
+          console.error(
+            `[SUPABASE] Erro ao atualizar curso [${id}]:`,
+            error.message
+          );
         } else {
-          console.log(`[SUPABASE] Curso [${id}] atualizado com sucesso no banco! Novo pre\xE7o: R$ ${updated.price}`);
+          console.log(
+            `[SUPABASE] Curso [${id}] atualizado com sucesso no banco! Novo pre\xE7o: R$ ${updated.price}`
+          );
         }
       } catch (err) {
         console.error(`[SUPABASE] Exce\xE7\xE3o ao atualizar curso [${id}]:`, err);
@@ -870,7 +896,9 @@ var Database = class {
           is_featured: course.isFeatured || false,
           is_active: course.isActive !== false
         });
-        console.log(`[SUPABASE] Novo curso [${course.id}] persistido no Supabase.`);
+        console.log(
+          `[SUPABASE] Novo curso [${course.id}] persistido no Supabase.`
+        );
       } catch (err) {
         console.error("[SUPABASE] Erro ao gravar novo curso:", err);
       }
@@ -885,10 +913,18 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        await supabase.from("courses").update({ is_active: course.isActive, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
-        console.log(`[SUPABASE] Status ativo do curso [${id}] alterado para: ${course.isActive}`);
+        await supabase.from("courses").update({
+          is_active: course.isActive,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        }).eq("id", id);
+        console.log(
+          `[SUPABASE] Status ativo do curso [${id}] alterado para: ${course.isActive}`
+        );
       } catch (err) {
-        console.error(`[SUPABASE] Erro ao alterar status ativo do curso [${id}]:`, err);
+        console.error(
+          `[SUPABASE] Erro ao alterar status ativo do curso [${id}]:`,
+          err
+        );
       }
     }
     return { success: true, isActive: course.isActive, course };
@@ -914,20 +950,33 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        console.log("[SUPABASE] Gravando aluno e pedido para CPF:", order.customerCpf);
-        const { data: studentData, error: studentError } = await supabase.from("students").upsert({
-          cpf: order.customerCpf,
-          full_name: order.customerName,
-          email: order.customerEmail,
-          whatsapp: order.customerWhatsapp,
-          birth_date: order.customerBirthDate || null,
-          cnh_number: order.customerCnhNumber,
-          cnh_category: order.customerCnhCategory
-        }, { onConflict: "cpf" }).select("id").single();
+        console.log(
+          "[SUPABASE] Gravando aluno e pedido para CPF:",
+          order.customerCpf
+        );
+        const { data: studentData, error: studentError } = await supabase.from("students").upsert(
+          {
+            cpf: order.customerCpf,
+            full_name: order.customerName,
+            email: order.customerEmail,
+            whatsapp: order.customerWhatsapp,
+            birth_date: order.customerBirthDate || null,
+            cnh_number: order.customerCnhNumber,
+            cnh_category: order.customerCnhCategory
+          },
+          { onConflict: "cpf" }
+        ).select("id").single();
         if (studentError) {
-          console.error("[SUPABASE] Erro ao gravar aluno na tabela students:", studentError.message, studentError.details);
+          console.error(
+            "[SUPABASE] Erro ao gravar aluno na tabela students:",
+            studentError.message,
+            studentError.details
+          );
         } else {
-          console.log("[SUPABASE] Aluno gravado com sucesso! ID:", studentData?.id);
+          console.log(
+            "[SUPABASE] Aluno gravado com sucesso! ID:",
+            studentData?.id
+          );
         }
         const { error: orderError } = await supabase.from("orders").insert({
           id: order.id,
@@ -951,15 +1000,27 @@ var Database = class {
           access_dispatched_status: order.accessDispatchedStatus
         });
         if (orderError) {
-          console.error("[SUPABASE] Erro ao gravar pedido na tabela orders:", orderError.message, orderError.details);
+          console.error(
+            "[SUPABASE] Erro ao gravar pedido na tabela orders:",
+            orderError.message,
+            orderError.details
+          );
         } else {
-          console.log("[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:", order.id);
+          console.log(
+            "[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:",
+            order.id
+          );
         }
       } catch (err) {
-        console.error("[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:", err);
+        console.error(
+          "[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:",
+          err
+        );
       }
     } else {
-      console.warn("[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env");
+      console.warn(
+        "[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env"
+      );
     }
     return order;
   }
@@ -970,12 +1031,10 @@ var Database = class {
     return this.orders.get(id);
   }
   async getOrderByIdAsync(id) {
-    const local = this.orders.get(id);
-    if (local) return local;
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        const { data, error } = await supabase.from("orders").select("*").or(`id.eq.${id},txid.eq.${id}`).order("created_at", { ascending: false }).limit(1).single();
+        const { data, error } = await supabase.from("orders").select("*").or(`id.eq.${id},txid.eq.${id}`).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (data && !error) {
           const restored = {
             id: data.id,
@@ -989,7 +1048,7 @@ var Database = class {
             customerEmail: data.customer_email,
             customerCpf: data.customer_cpf,
             customerWhatsapp: data.customer_whatsapp,
-            customerBirthDate: "",
+            customerBirthDate: data.customer_birth_date || "",
             customerCnhNumber: data.customer_cnh_number || "",
             customerCnhCategory: data.customer_cnh_category || "B",
             amount: Number(data.course_price || 0),
@@ -1006,28 +1065,17 @@ var Database = class {
           this.orders.set(restored.txid, restored);
           return restored;
         }
+        this.orders.delete(id);
+        return null;
       } catch (err) {
         console.warn("[DB] Erro ao recuperar pedido no Supabase:", err);
       }
     }
-    return void 0;
+    return this.orders.get(id) || null;
   }
   async findStudentByCpf(cpf) {
     const cleanCpf = cpf.replace(/\D/g, "");
     if (!cleanCpf) return null;
-    for (const order of this.orders.values()) {
-      if (order.customerCpf.replace(/\D/g, "") === cleanCpf) {
-        return {
-          fullName: order.customerName,
-          cpf: order.customerCpf,
-          email: order.customerEmail,
-          whatsapp: order.customerWhatsapp,
-          birthDate: order.customerBirthDate,
-          cnhNumber: order.customerCnhNumber,
-          cnhCategory: order.customerCnhCategory
-        };
-      }
-    }
     const supabase = await getSupabase();
     if (supabase) {
       try {
@@ -1047,21 +1095,32 @@ var Database = class {
         const orderCpfFilter = buildCpfFilter("customer_cpf", cleanCpf);
         const { data: orderData, error: orderErr } = await supabase.from("orders").select("*").or(orderCpfFilter).limit(1).maybeSingle();
         if (orderData && !orderErr) {
-          const localOrder = Array.from(this.orders.values()).find(
-            (o) => o.customerCpf.replace(/\D/g, "") === cleanCpf
-          );
           return {
             fullName: orderData.customer_name,
             cpf: orderData.customer_cpf,
             email: orderData.customer_email,
             whatsapp: orderData.customer_whatsapp,
-            birthDate: orderData.customer_birth_date || localOrder?.customerBirthDate || "",
+            birthDate: orderData.customer_birth_date || "",
             cnhNumber: orderData.customer_cnh_number,
             cnhCategory: orderData.customer_cnh_category
           };
         }
+        return null;
       } catch (err) {
         console.warn("[DB] Erro ao consultar aluno no Supabase:", err);
+      }
+    }
+    for (const order of this.orders.values()) {
+      if (order.customerCpf.replace(/\D/g, "") === cleanCpf) {
+        return {
+          fullName: order.customerName,
+          cpf: order.customerCpf,
+          email: order.customerEmail,
+          whatsapp: order.customerWhatsapp,
+          birthDate: order.customerBirthDate,
+          cnhNumber: order.customerCnhNumber,
+          cnhCategory: order.customerCnhCategory
+        };
       }
     }
     return null;
@@ -1110,7 +1169,10 @@ var Database = class {
           return restored;
         }
       } catch (err) {
-        console.warn("[DB] Erro ao checar pedido duplicado por curso/cpf:", err);
+        console.warn(
+          "[DB] Erro ao checar pedido duplicado por curso/cpf:",
+          err
+        );
       }
     }
     return null;
@@ -1235,7 +1297,10 @@ var Database = class {
           }
         }
       } catch (err) {
-        console.warn("[DB] Erro ao consultar registros do aluno no Supabase:", err);
+        console.warn(
+          "[DB] Erro ao consultar registros do aluno no Supabase:",
+          err
+        );
       }
     }
     const authorized = registeredInSupabase || registeredInAdmin;
@@ -1285,16 +1350,12 @@ var Database = class {
             }
           }
         }
-      } catch (e) {
-        console.warn("[DB] Erro ao buscar lista de alunos no Supabase:", e);
-      }
-      try {
         const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
         if (data && !error) {
+          this.orders.clear();
           for (const row of data) {
             const cleanCpf = (row.customer_cpf || "").replace(/\D/g, "");
-            const localOrder = this.orders.get(row.id);
-            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || localOrder?.customerBirthDate || "";
+            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || "";
             const ord = {
               id: row.id,
               txid: row.txid,
@@ -1324,17 +1385,15 @@ var Database = class {
             this.orders.set(ord.id, ord);
             this.orders.set(ord.txid, ord);
           }
+          return Array.from(uniqueOrders.values()).sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
         }
       } catch (err) {
         console.warn("[DB] Erro ao listar pedidos do Supabase:", err);
       }
     }
-    for (const order of this.orders.values()) {
-      if (!uniqueOrders.has(order.id)) {
-        uniqueOrders.set(order.id, order);
-      }
-    }
-    return Array.from(uniqueOrders.values()).sort(
+    return Array.from(this.orders.values()).sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
   }
