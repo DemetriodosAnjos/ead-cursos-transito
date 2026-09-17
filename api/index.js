@@ -1,41 +1,6 @@
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-// api/_handler.ts
-var handler_exports = {};
-__export(handler_exports, {
-  default: () => handler_default
-});
-module.exports = __toCommonJS(handler_exports);
-
 // server/app.ts
-var import_express = __toESM(require("express"));
-var import_dotenv2 = __toESM(require("dotenv"));
+import express from "express";
+import dotenv2 from "dotenv";
 
 // src/data/courses.ts
 var COURSES = [
@@ -51,7 +16,9 @@ var COURSES = [
     categoryLabel: "Forma\xE7\xE3o Especializada",
     description: "Capacita\xE7\xE3o obrigat\xF3ria de 50 horas para condutores de ambul\xE2ncias, viaturas policiais e resgate.",
     fullDescription: "Curso homologado pelo DETRAN/CONTRAN com lan\xE7amento direto no RENACH/CNH Digital. Treinamento completo em dire\xE7\xE3o defensiva emergencial, condu\xE7\xE3o segura em deslocamentos r\xE1pidos, psicologia e legisla\xE7\xE3o.",
-    price: 169,
+    price: 1.2,
+    costPrice: 1,
+    profitPercent: 20,
     duration: "50 horas",
     workloadHours: 50,
     detranApproval: "Homologado Resolu\xE7\xE3o CONTRAN n\xBA 789/20 e DETRAN PR",
@@ -72,7 +39,9 @@ var COURSES = [
     categoryLabel: "Forma\xE7\xE3o Especializada",
     description: "Curso obrigat\xF3rio para condu\xE7\xE3o de cargas com combust\xEDveis, inflam\xE1veis, explosivos e qu\xEDmicas.",
     fullDescription: "Habilita\xE7\xE3o profissional para transporte rodovi\xE1rio de cargas perigosas. Conte\xFAdo completo sobre simbologia de risco, normas ANTT, equipamentos EPI e procedimentos em sinistros.",
-    price: 169,
+    price: 2.41,
+    costPrice: 1,
+    profitPercent: 141.4,
     duration: "50 horas",
     workloadHours: 50,
     detranApproval: "Homologado CONTRAN / DETRAN PR",
@@ -93,7 +62,9 @@ var COURSES = [
     categoryLabel: "Forma\xE7\xE3o Especializada",
     description: "Qualifica\xE7\xE3o exigida para motoristas de vans escolares, micro-\xF4nibus e transporte infantil.",
     fullDescription: "Capacite-se para transportar crian\xE7as e adolescentes com m\xE1xima seguran\xE7a e conformidade perante as secretarias municipais e o DETRAN.",
-    price: 169,
+    price: 1.1,
+    costPrice: 1,
+    profitPercent: 10,
     duration: "50 horas",
     workloadHours: 50,
     detranApproval: "Homologado DETRAN PR",
@@ -606,8 +577,8 @@ var COURSES = [
 ];
 
 // server/supabase.ts
-var import_dotenv = __toESM(require("dotenv"));
-import_dotenv.default.config();
+import dotenv from "dotenv";
+dotenv.config();
 var supabaseInstance = null;
 async function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
@@ -639,31 +610,76 @@ var isSupabaseConfigured = () => {
 };
 
 // server/db.ts
+function getCpfVariations(cpf) {
+  const clean = (cpf || "").replace(/\D/g, "");
+  const set = /* @__PURE__ */ new Set();
+  if (clean) set.add(clean);
+  if (cpf && cpf.trim()) set.add(cpf.trim());
+  if (clean.length === 11) {
+    set.add(`${clean.slice(0, 3)}.${clean.slice(3, 6)}.${clean.slice(6, 9)}-${clean.slice(9, 11)}`);
+  }
+  return Array.from(set).filter(Boolean);
+}
+function buildCpfFilter(field, cpf) {
+  const variations = getCpfVariations(cpf);
+  return variations.map((v) => `${field}.eq.${v}`).join(",");
+}
 var Database = class {
   constructor() {
     this.orders = /* @__PURE__ */ new Map();
     this.webhookLogs = [];
-    this.courses = COURSES.map((c) => {
-      const costPrice = c.costPrice ?? (c.price <= 120 ? 50 : c.price <= 150 ? 65 : 70);
-      const profitPercent = c.profitPercent ?? (costPrice > 0 ? Number(((c.price - costPrice) / costPrice * 100).toFixed(1)) : 100);
-      return {
-        ...c,
-        costPrice,
-        profitPercent,
-        isActive: c.isActive !== false
-      };
-    });
-    this.initSupabaseSeed();
+    this.courses = [];
+    this.initSupabaseCourses();
   }
-  // Semeia os 28 cursos no Supabase se ainda não existirem
-  async initSupabaseSeed() {
+  // Converte linha do Supabase para a tipagem Course do app
+  mapSupabaseRowToCourse(row) {
+    const rawPrice = row.price !== void 0 && row.price !== null ? Number(row.price) : 169;
+    const costPrice = row.cost_price !== void 0 && row.cost_price !== null ? Number(row.cost_price) : void 0;
+    const profitPercent = row.profit_percent !== void 0 && row.profit_percent !== null ? Number(row.profit_percent) : void 0;
+    return {
+      id: String(row.id),
+      title: row.title || "",
+      subtitle: row.subtitle || "",
+      acronym: row.acronym || "",
+      category: row.category || "especializados",
+      categoryLabel: row.category_label || row.categoryLabel || "Forma\xE7\xE3o Especializada",
+      description: row.description || "",
+      fullDescription: row.full_description || row.fullDescription || row.description || "",
+      price: rawPrice,
+      costPrice,
+      profitPercent,
+      duration: row.duration || "50 horas",
+      workloadHours: row.workload_hours !== void 0 && row.workload_hours !== null ? Number(row.workload_hours) : 50,
+      detranApproval: row.detran_approval || row.detranApproval || "Homologado Resolu\xE7\xE3o CONTRAN e DETRAN PR",
+      modality: row.modality || "100% Online EAD",
+      thumbnail: row.thumbnail || "",
+      backdrop: row.backdrop || "",
+      badge: row.badge || "",
+      requirements: Array.isArray(row.requirements) ? row.requirements : [],
+      modules: Array.isArray(row.modules) ? row.modules : [],
+      isFeatured: row.is_featured === true || row.isFeatured === true,
+      isActive: row.is_active !== false && row.isActive !== false
+    };
+  }
+  // Inicializa e carrega catálogo exclusivamente a partir do Supabase
+  async initSupabaseCourses() {
     const supabase = await getSupabase();
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn("[SUPABASE] N\xE3o conectado. Usando cat\xE1logo est\xE1tico como conting\xEAncia.");
+      this.courses = COURSES.map((c) => ({
+        ...c,
+        isActive: c.isActive !== false
+      }));
+      return;
+    }
     try {
-      const { data, error } = await supabase.from("courses").select("id").limit(1);
-      if (!error && (!data || data.length === 0)) {
-        console.log("[SUPABASE] Semeando cat\xE1logo de 28 cursos...");
-        const coursesToInsert = this.courses.map((c) => ({
+      const { data, error } = await supabase.from("courses").select("*").order("id");
+      if (!error && data && data.length > 0) {
+        this.courses = data.map((r) => this.mapSupabaseRowToCourse(r));
+        console.log(`[SUPABASE] Cat\xE1logo de ${this.courses.length} cursos sincronizado exclusivamente do Supabase PostgreSQL.`);
+      } else if (!error && (!data || data.length === 0)) {
+        console.log("[SUPABASE] Tabela courses vazia. Semeando cat\xE1logo inicial...");
+        const coursesToInsert = COURSES.map((c) => ({
           id: c.id,
           title: c.title,
           subtitle: c.subtitle,
@@ -682,30 +698,63 @@ var Database = class {
           badge: c.badge,
           requirements: c.requirements,
           modules: c.modules,
-          is_featured: c.isFeatured || false
+          is_featured: c.isFeatured || false,
+          cost_price: c.costPrice ?? (c.price <= 120 ? 50 : c.price <= 150 ? 65 : 70),
+          profit_percent: c.profitPercent ?? 100,
+          is_active: c.isActive !== false
         }));
         await supabase.from("courses").upsert(coursesToInsert);
-        console.log(
-          "[SUPABASE] 28 cursos sincronizados com sucesso no PostgreSQL!"
-        );
+        this.courses = coursesToInsert.map((r) => this.mapSupabaseRowToCourse(r));
+        console.log("[SUPABASE] 28 cursos semeados no Supabase.");
       }
     } catch (err) {
-      console.warn("[SUPABASE] Aviso ao sincronizar cursos:", err);
+      console.error("[SUPABASE] Erro ao carregar cat\xE1logo de cursos:", err);
     }
   }
-  getCourses(includeInactive = false) {
+  // Supabase como única fonte de verdade para listagem de cursos
+  async getCourses(includeInactive = false) {
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from("courses").select("*").order("id");
+        if (!error && data && data.length > 0) {
+          this.courses = data.map((r) => this.mapSupabaseRowToCourse(r));
+        }
+      } catch (err) {
+        console.warn("[SUPABASE] Erro ao buscar cursos em tempo real:", err);
+      }
+    }
     if (includeInactive) {
       return [...this.courses];
     }
     return this.courses.filter((c) => c.isActive !== false);
   }
-  getCourseById(id) {
+  // Supabase como única fonte de verdade para busca por ID
+  async getCourseById(id) {
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from("courses").select("*").eq("id", id).single();
+        if (!error && data) {
+          const course = this.mapSupabaseRowToCourse(data);
+          const idx = this.courses.findIndex((c) => c.id === id);
+          if (idx >= 0) {
+            this.courses[idx] = course;
+          } else {
+            this.courses.push(course);
+          }
+          return course;
+        }
+      } catch (err) {
+        console.warn(`[SUPABASE] Erro ao buscar curso [${id}] em tempo real:`, err);
+      }
+    }
     return this.courses.find((c) => c.id === id);
   }
+  // Atualização direta no Supabase
   async updateCourse(id, updates) {
-    const idx = this.courses.findIndex((c) => c.id === id);
-    if (idx === -1) return null;
-    const current = this.courses[idx];
+    let current = await this.getCourseById(id);
+    if (!current) return null;
     const updated = {
       ...current,
       ...updates
@@ -723,29 +772,52 @@ var Database = class {
         updated.price = cost > 0 ? Number((cost * (1 + profit / 100)).toFixed(2)) : cost;
       }
     }
-    this.courses[idx] = updated;
-    console.log(
-      `[DB] Curso atualizado: ${id} | Pre\xE7o: R$ ${updated.price} | Custo: R$ ${updated.costPrice} | Lucro: ${updated.profitPercent}% | Ativo: ${updated.isActive}`
-    );
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        const { error } = await supabase.from("courses").update({
+        const payload = {
           price: updated.price,
           cost_price: updated.costPrice,
           profit_percent: updated.profitPercent,
-          is_active: updated.isActive
-        }).eq("id", id);
+          is_active: updated.isActive !== false,
+          updated_at: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        if (updates.title !== void 0) payload.title = updated.title;
+        if (updates.subtitle !== void 0) payload.subtitle = updated.subtitle;
+        if (updates.acronym !== void 0) payload.acronym = updated.acronym;
+        if (updates.category !== void 0) payload.category = updated.category;
+        if (updates.categoryLabel !== void 0) payload.category_label = updated.categoryLabel;
+        if (updates.description !== void 0) payload.description = updated.description;
+        if (updates.fullDescription !== void 0) payload.full_description = updated.fullDescription;
+        if (updates.duration !== void 0) payload.duration = updated.duration;
+        if (updates.workloadHours !== void 0) payload.workload_hours = updated.workloadHours;
+        if (updates.detranApproval !== void 0) payload.detran_approval = updated.detranApproval;
+        if (updates.modality !== void 0) payload.modality = updated.modality;
+        if (updates.thumbnail !== void 0) payload.thumbnail = updated.thumbnail;
+        if (updates.backdrop !== void 0) payload.backdrop = updated.backdrop;
+        if (updates.badge !== void 0) payload.badge = updated.badge;
+        if (updates.requirements !== void 0) payload.requirements = updated.requirements;
+        if (updates.modules !== void 0) payload.modules = updated.modules;
+        if (updates.isFeatured !== void 0) payload.is_featured = updated.isFeatured;
+        const { error } = await supabase.from("courses").update(payload).eq("id", id);
         if (error) {
-          console.error("[SUPABASE] Erro ao atualizar curso:", error.message);
+          console.error(`[SUPABASE] Erro ao atualizar curso [${id}]:`, error.message);
+        } else {
+          console.log(`[SUPABASE] Curso [${id}] atualizado com sucesso no banco! Novo pre\xE7o: R$ ${updated.price}`);
         }
       } catch (err) {
-        console.error("[SUPABASE] Exce\xE7\xE3o ao atualizar curso:", err);
+        console.error(`[SUPABASE] Exce\xE7\xE3o ao atualizar curso [${id}]:`, err);
       }
+    }
+    const idx = this.courses.findIndex((c) => c.id === id);
+    if (idx >= 0) {
+      this.courses[idx] = updated;
+    } else {
+      this.courses.push(updated);
     }
     return updated;
   }
-  createCourse(newCourse) {
+  async createCourse(newCourse) {
     let id = newCourse.id ? newCourse.id.trim() : "";
     if (!id) {
       id = newCourse.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -771,27 +843,68 @@ var Database = class {
       requirements: Array.isArray(newCourse.requirements) ? newCourse.requirements : [],
       modules: Array.isArray(newCourse.modules) ? newCourse.modules : []
     };
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        await supabase.from("courses").insert({
+          id: course.id,
+          title: course.title,
+          subtitle: course.subtitle,
+          acronym: course.acronym,
+          category: course.category,
+          category_label: course.categoryLabel,
+          description: course.description,
+          full_description: course.fullDescription,
+          price: course.price,
+          cost_price: course.costPrice,
+          profit_percent: course.profitPercent,
+          duration: course.duration,
+          workload_hours: course.workloadHours,
+          detran_approval: course.detranApproval,
+          modality: course.modality,
+          thumbnail: course.thumbnail,
+          backdrop: course.backdrop,
+          badge: course.badge,
+          requirements: course.requirements,
+          modules: course.modules,
+          is_featured: course.isFeatured || false,
+          is_active: course.isActive !== false
+        });
+        console.log(`[SUPABASE] Novo curso [${course.id}] persistido no Supabase.`);
+      } catch (err) {
+        console.error("[SUPABASE] Erro ao gravar novo curso:", err);
+      }
+    }
     this.courses.unshift(course);
-    console.log(
-      `[DB] Novo curso cadastrado com sucesso: [${course.id}] ${course.title} (Pre\xE7o: R$ ${course.price})`
-    );
     return course;
   }
-  toggleCourseActive(id) {
-    const course = this.courses.find((c) => c.id === id);
+  async toggleCourseActive(id) {
+    const course = await this.getCourseById(id);
     if (!course) return { success: false, isActive: false };
     course.isActive = course.isActive === false ? true : false;
-    console.log(
-      `[DB] Status do curso [${id}] alterado para: ${course.isActive ? "ATIVO" : "INATIVO/OCULTO"}`
-    );
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        await supabase.from("courses").update({ is_active: course.isActive, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("id", id);
+        console.log(`[SUPABASE] Status ativo do curso [${id}] alterado para: ${course.isActive}`);
+      } catch (err) {
+        console.error(`[SUPABASE] Erro ao alterar status ativo do curso [${id}]:`, err);
+      }
+    }
     return { success: true, isActive: course.isActive, course };
   }
-  deleteCourse(id) {
+  async deleteCourse(id) {
     const initialLen = this.courses.length;
     this.courses = this.courses.filter((c) => c.id !== id);
     const removed = this.courses.length < initialLen;
-    if (removed) {
-      console.log(`[DB] Curso removido: ${id}`);
+    const supabase = await getSupabase();
+    if (supabase) {
+      try {
+        await supabase.from("courses").delete().eq("id", id);
+        console.log(`[SUPABASE] Curso [${id}] removido do banco.`);
+      } catch (err) {
+        console.error(`[SUPABASE] Erro ao remover curso [${id}]:`, err);
+      }
     }
     return removed;
   }
@@ -801,33 +914,20 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        console.log(
-          "[SUPABASE] Gravando aluno e pedido para CPF:",
-          order.customerCpf
-        );
-        const { data: studentData, error: studentError } = await supabase.from("students").upsert(
-          {
-            cpf: order.customerCpf,
-            full_name: order.customerName,
-            email: order.customerEmail,
-            whatsapp: order.customerWhatsapp,
-            birth_date: order.customerBirthDate || null,
-            cnh_number: order.customerCnhNumber,
-            cnh_category: order.customerCnhCategory
-          },
-          { onConflict: "cpf" }
-        ).select("id").single();
+        console.log("[SUPABASE] Gravando aluno e pedido para CPF:", order.customerCpf);
+        const { data: studentData, error: studentError } = await supabase.from("students").upsert({
+          cpf: order.customerCpf,
+          full_name: order.customerName,
+          email: order.customerEmail,
+          whatsapp: order.customerWhatsapp,
+          birth_date: order.customerBirthDate || null,
+          cnh_number: order.customerCnhNumber,
+          cnh_category: order.customerCnhCategory
+        }, { onConflict: "cpf" }).select("id").single();
         if (studentError) {
-          console.error(
-            "[SUPABASE] Erro ao gravar aluno na tabela students:",
-            studentError.message,
-            studentError.details
-          );
+          console.error("[SUPABASE] Erro ao gravar aluno na tabela students:", studentError.message, studentError.details);
         } else {
-          console.log(
-            "[SUPABASE] Aluno gravado com sucesso! ID:",
-            studentData?.id
-          );
+          console.log("[SUPABASE] Aluno gravado com sucesso! ID:", studentData?.id);
         }
         const { error: orderError } = await supabase.from("orders").insert({
           id: order.id,
@@ -851,75 +951,20 @@ var Database = class {
           access_dispatched_status: order.accessDispatchedStatus
         });
         if (orderError) {
-          console.error(
-            "[SUPABASE] Erro ao gravar pedido na tabela orders:",
-            orderError.message,
-            orderError.details
-          );
+          console.error("[SUPABASE] Erro ao gravar pedido na tabela orders:", orderError.message, orderError.details);
         } else {
-          console.log(
-            "[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:",
-            order.id
-          );
+          console.log("[SUPABASE] Pedido gravado com sucesso no PostgreSQL! ID:", order.id);
         }
       } catch (err) {
-        console.error(
-          "[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:",
-          err
-        );
+        console.error("[SUPABASE] Exce\xE7\xE3o inesperada ao gravar pedido/aluno:", err);
       }
     } else {
-      console.warn(
-        "[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env"
-      );
+      console.warn("[SUPABASE] Supabase n\xE3o conectado. Verifique SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env");
     }
     return order;
   }
-  async getOrderByTxid(txidOrId) {
-    const cached = this.orders.get(txidOrId);
-    const supabase = await getSupabase();
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from("orders").select("*").or(`id.eq.${txidOrId},txid.eq.${txidOrId}`).limit(1).maybeSingle();
-        if (data && !error) {
-          const restored = {
-            id: data.id,
-            txid: data.txid,
-            gateway: data.gateway || "MERCADO_PAGO",
-            courseId: data.course_id,
-            courseTitle: data.course_title,
-            courseSubtitle: "DETRAN Homologado",
-            courseThumbnail: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80",
-            customerName: data.customer_name,
-            customerEmail: data.customer_email,
-            customerCpf: data.customer_cpf,
-            customerWhatsapp: data.customer_whatsapp,
-            customerBirthDate: data.customer_birth_date || "",
-            customerCnhNumber: data.customer_cnh_number || "",
-            customerCnhCategory: data.customer_cnh_category || "B",
-            amount: Number(data.course_price || 0),
-            status: data.status,
-            statusMessage: data.status_message,
-            qrCodeUrl: data.qr_code_url,
-            pixCopiaECola: data.pix_copia_e_cola,
-            createdAt: data.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-            paidAt: data.paid_at,
-            accessDispatchedStatus: data.access_dispatched_status,
-            mercadoPagoPaymentId: data.mercado_pago_payment_id,
-            paymentMethod: data.payment_method || "PIX"
-          };
-          this.orders.set(restored.id, restored);
-          this.orders.set(restored.txid, restored);
-          return restored;
-        }
-      } catch (err) {
-        console.warn(
-          "[DB] Erro ao consultar status do pedido no Supabase:",
-          err
-        );
-      }
-    }
-    return cached;
+  getOrderByTxid(txidOrId) {
+    return this.orders.get(txidOrId);
   }
   getOrderById(id) {
     return this.orders.get(id);
@@ -986,7 +1031,8 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        const { data: student, error: studentErr } = await supabase.from("students").select("*").or(`cpf.eq.${cleanCpf},cpf.eq.${cpf}`).limit(1).maybeSingle();
+        const studentCpfFilter = buildCpfFilter("cpf", cleanCpf);
+        const { data: student, error: studentErr } = await supabase.from("students").select("*").or(studentCpfFilter).limit(1).maybeSingle();
         if (student && !studentErr) {
           return {
             fullName: student.full_name,
@@ -998,7 +1044,8 @@ var Database = class {
             cnhCategory: student.cnh_category
           };
         }
-        const { data: orderData, error: orderErr } = await supabase.from("orders").select("*").or(`customer_cpf.eq.${cleanCpf},customer_cpf.eq.${cpf}`).limit(1).maybeSingle();
+        const orderCpfFilter = buildCpfFilter("customer_cpf", cleanCpf);
+        const { data: orderData, error: orderErr } = await supabase.from("orders").select("*").or(orderCpfFilter).limit(1).maybeSingle();
         if (orderData && !orderErr) {
           const localOrder = Array.from(this.orders.values()).find(
             (o) => o.customerCpf.replace(/\D/g, "") === cleanCpf
@@ -1030,7 +1077,8 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        const { data, error } = await supabase.from("orders").select("*").or(`customer_cpf.eq.${cleanCpf},customer_cpf.eq.${cpf}`).eq("course_id", courseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const orderCpfFilter = buildCpfFilter("customer_cpf", cleanCpf);
+        const { data, error } = await supabase.from("orders").select("*").or(orderCpfFilter).eq("course_id", courseId).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (data && !error) {
           const restored = {
             id: data.id,
@@ -1062,10 +1110,7 @@ var Database = class {
           return restored;
         }
       } catch (err) {
-        console.warn(
-          "[DB] Erro ao checar pedido duplicado por curso/cpf:",
-          err
-        );
+        console.warn("[DB] Erro ao checar pedido duplicado por curso/cpf:", err);
       }
     }
     return null;
@@ -1080,7 +1125,8 @@ var Database = class {
     const supabase = await getSupabase();
     if (supabase) {
       try {
-        const { data, error } = await supabase.from("orders").select("*").or(`customer_cpf.eq.${cleanCpf},customer_cpf.eq.${cpf}`).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const orderCpfFilter = buildCpfFilter("customer_cpf", cleanCpf);
+        const { data, error } = await supabase.from("orders").select("*").or(orderCpfFilter).order("created_at", { ascending: false }).limit(1).maybeSingle();
         if (data && !error) {
           const restored = {
             id: data.id,
@@ -1145,16 +1191,18 @@ var Database = class {
     let supabaseBirthDate = "";
     if (supabase) {
       try {
-        const { data: studentRecord, error: sErr } = await supabase.from("students").select("*").or(`cpf.eq.${cleanCpf},cpf.eq.${cpf}`).maybeSingle();
+        const studentFilter = buildCpfFilter("cpf", cleanCpf);
+        const { data: studentRecord, error: sErr } = await supabase.from("students").select("*").or(studentFilter).maybeSingle();
         if (studentRecord && !sErr) {
           registeredInSupabase = true;
           supabaseBirthDate = studentRecord.birth_date || "";
         }
-        const { data: ordersData, error: oErr } = await supabase.from("orders").select("*").or(`customer_cpf.eq.${cleanCpf},customer_cpf.eq.${cpf}`).order("created_at", { ascending: false });
+        const orderFilter = buildCpfFilter("customer_cpf", cleanCpf);
+        const { data: ordersData, error: oErr } = await supabase.from("orders").select("*").or(orderFilter).order("created_at", { ascending: false });
         if (ordersData && !oErr && ordersData.length > 0) {
           registeredInSupabase = true;
           for (const row of ordersData) {
-            const courseDef = COURSES.find((c) => c.id === row.course_id);
+            const courseDef = this.courses.find((c) => c.id === row.course_id) || COURSES.find((c) => c.id === row.course_id);
             const localOrd = this.orders.get(row.id);
             const restored = {
               id: row.id,
@@ -1187,10 +1235,7 @@ var Database = class {
           }
         }
       } catch (err) {
-        console.warn(
-          "[DB] Erro ao consultar registros do aluno no Supabase:",
-          err
-        );
+        console.warn("[DB] Erro ao consultar registros do aluno no Supabase:", err);
       }
     }
     const authorized = registeredInSupabase || registeredInAdmin;
@@ -1230,7 +1275,6 @@ var Database = class {
     const uniqueOrders = /* @__PURE__ */ new Map();
     const supabase = await getSupabase();
     const studentsBirthMap = /* @__PURE__ */ new Map();
-    let supabaseOrdersLoaded = false;
     if (supabase) {
       try {
         const { data: studentsData } = await supabase.from("students").select("cpf, birth_date");
@@ -1247,11 +1291,10 @@ var Database = class {
       try {
         const { data, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false });
         if (data && !error) {
-          supabaseOrdersLoaded = true;
-          this.orders.clear();
           for (const row of data) {
             const cleanCpf = (row.customer_cpf || "").replace(/\D/g, "");
-            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || "";
+            const localOrder = this.orders.get(row.id);
+            const birthDate = row.customer_birth_date || studentsBirthMap.get(cleanCpf) || localOrder?.customerBirthDate || "";
             const ord = {
               id: row.id,
               txid: row.txid,
@@ -1286,11 +1329,9 @@ var Database = class {
         console.warn("[DB] Erro ao listar pedidos do Supabase:", err);
       }
     }
-    if (!supabaseOrdersLoaded) {
-      for (const order of this.orders.values()) {
-        if (!uniqueOrders.has(order.id)) {
-          uniqueOrders.set(order.id, order);
-        }
+    for (const order of this.orders.values()) {
+      if (!uniqueOrders.has(order.id)) {
+        uniqueOrders.set(order.id, order);
       }
     }
     return Array.from(uniqueOrders.values()).sort(
@@ -1334,23 +1375,13 @@ var Database = class {
       this.orders.set(order.id, order);
       const supabase = await getSupabase();
       if (supabase) {
-        try {
-          const { error } = await supabase.from("orders").update({
-            status: "PAID",
-            paid_at: order.paidAt,
-            status_message: order.statusMessage,
-            mercado_pago_payment_id: mercadoPagoId || order.mercadoPagoPaymentId,
-            access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL"
-          }).or(`id.eq.${order.id},txid.eq.${order.txid}`);
-          if (error) {
-            console.error(
-              "[SUPABASE] Erro ao marcar pedido como PAID:",
-              error.message
-            );
-          }
-        } catch (err) {
-          console.error("[SUPABASE] Exce\xE7\xE3o ao marcar pedido como PAID:", err);
-        }
+        supabase.from("orders").update({
+          status: "PAID",
+          paid_at: order.paidAt,
+          status_message: order.statusMessage,
+          mercado_pago_payment_id: mercadoPagoId || order.mercadoPagoPaymentId,
+          access_dispatched_status: "AGUARDANDO_ENVIO_MANUAL"
+        }).or(`id.eq.${order.id},txid.eq.${order.txid}`).then();
       }
       return { order };
     }
@@ -1365,20 +1396,10 @@ var Database = class {
     this.orders.set(order.id, order);
     const supabase = await getSupabase();
     if (supabase) {
-      try {
-        const { error } = await supabase.from("orders").update({
-          access_dispatched_status: "ENVIADO",
-          access_dispatched_at: order.accessDispatchedAt
-        }).eq("id", order.id);
-        if (error) {
-          console.error(
-            "[SUPABASE] Erro ao marcar acesso como enviado:",
-            error.message
-          );
-        }
-      } catch (err) {
-        console.error("[SUPABASE] Exce\xE7\xE3o ao marcar acesso como enviado:", err);
-      }
+      supabase.from("orders").update({
+        access_dispatched_status: "ENVIADO",
+        access_dispatched_at: order.accessDispatchedAt
+      }).eq("id", order.id).then();
     }
     return order;
   }
@@ -1413,8 +1434,8 @@ var Database = class {
 var db = new Database();
 
 // server/mercadoPagoService.ts
-var import_qrcode = __toESM(require("qrcode"));
-var import_crypto = __toESM(require("crypto"));
+import QRCode from "qrcode";
+import crypto from "crypto";
 
 // server/pixHelper.ts
 function crc16(payload) {
@@ -1490,7 +1511,7 @@ var MercadoPagoService = class {
     const webhookUrl = `${appUrl2.replace(/\/$/, "")}/api/webhooks/mercadopago`;
     if (token && token.length > 10 && !token.includes("MY_") && !token.includes("...")) {
       try {
-        const idempotencyKey = import_crypto.default.randomUUID();
+        const idempotencyKey = crypto.randomUUID();
         const payload = {
           transaction_amount: Number(amount.toFixed(2)),
           description: `Curso: ${courseTitle.slice(0, 50)}`,
@@ -1528,7 +1549,7 @@ var MercadoPagoService = class {
         if (transactionData?.qr_code_base64) {
           qrCodeUrl = `data:image/png;base64,${transactionData.qr_code_base64}`;
         } else if (pixCopiaECola) {
-          qrCodeUrl = await import_qrcode.default.toDataURL(pixCopiaECola, {
+          qrCodeUrl = await QRCode.toDataURL(pixCopiaECola, {
             width: 320,
             margin: 2,
             color: { dark: "#009ee3", light: "#ffffff" }
@@ -1557,7 +1578,7 @@ var MercadoPagoService = class {
       txid: orderId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 25),
       description: courseTitle
     });
-    const qrCodeUrl = await import_qrcode.default.toDataURL(pixCopiaECola, {
+    const qrCodeUrl = await QRCode.toDataURL(pixCopiaECola, {
       width: 320,
       margin: 2,
       color: { dark: "#0284c7", light: "#ffffff" }
@@ -1687,37 +1708,390 @@ var MercadoPagoService = class {
 };
 var mercadoPagoService = new MercadoPagoService();
 
+// server/whatsappQueueService.ts
+var META_HARD_LIMIT = 40;
+var MAX_MESSAGES_PER_MINUTE = 38;
+var MIN_INTERVAL_MS = 1600;
+var WhatsAppQueueService = class {
+  constructor() {
+    this.queue = [];
+    this.history = [];
+    this.sentTimestamps = [];
+    this.isProcessing = false;
+    this.isPaused = false;
+    this.lastDispatchedAt = 0;
+    this.totalSent = 0;
+    this.totalFailed = 0;
+    setInterval(() => this.cleanOldTimestamps(), 1e4);
+  }
+  /**
+   * Remove timestamps com mais de 60 segundos (janela móvel)
+   */
+  cleanOldTimestamps() {
+    const now = Date.now();
+    this.sentTimestamps = this.sentTimestamps.filter((t) => now - t < 6e4);
+  }
+  /**
+   * Quantidade de mensagens disparadas nos últimos 60 segundos
+   */
+  getSentLastMinuteCount() {
+    this.cleanOldTimestamps();
+    return this.sentTimestamps.length;
+  }
+  /**
+   * Retorna estatísticas completas de proteção e vazão da fila
+   */
+  getStats() {
+    const sentLastMinute = this.getSentLastMinuteCount();
+    const queuedCount = this.queue.length;
+    let protectionStatus = "SAFE";
+    if (this.isPaused) {
+      protectionStatus = "PAUSED";
+    } else if (sentLastMinute >= MAX_MESSAGES_PER_MINUTE - 3) {
+      protectionStatus = "THROTTLING";
+    }
+    const estimatedDrainTimeSeconds = Math.ceil(queuedCount * MIN_INTERVAL_MS / 1e3);
+    return {
+      queuedCount,
+      sentLastMinute,
+      maxPerMinute: MAX_MESSAGES_PER_MINUTE,
+      metaHardLimit: META_HARD_LIMIT,
+      safeMarginPerMinute: META_HARD_LIMIT - MAX_MESSAGES_PER_MINUTE,
+      protectionStatus,
+      totalSent: this.totalSent,
+      totalFailed: this.totalFailed,
+      minIntervalMs: MIN_INTERVAL_MS,
+      estimatedDrainTimeSeconds,
+      isPaused: this.isPaused,
+      lastDispatchedAt: this.lastDispatchedAt ? new Date(this.lastDispatchedAt).toISOString() : void 0
+    };
+  }
+  /**
+   * Formata número de telefone para o padrão WhatsApp internacional E.164 (55 + DDD + 9 dígitos)
+   */
+  formatPhoneForWhatsApp(phone) {
+    const digits = (phone || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("55") && digits.length >= 12) {
+      return digits;
+    }
+    return `55${digits}`;
+  }
+  /**
+   * Adiciona uma mensagem à fila com prioridade e garantia anti-bloqueio
+   */
+  enqueue(item) {
+    const priority = item.priority || "NORMAL";
+    const queueItem = {
+      id: `wa_msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      orderId: item.orderId,
+      recipientPhone: this.formatPhoneForWhatsApp(item.recipientPhone),
+      recipientName: item.recipientName,
+      courseTitle: item.courseTitle,
+      type: item.type,
+      messageText: item.messageText,
+      status: "QUEUED",
+      priority,
+      enqueuedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      attempts: 0
+    };
+    if (priority === "HIGH") {
+      const insertIndex = this.queue.findIndex((q) => q.priority !== "HIGH");
+      if (insertIndex === -1) {
+        this.queue.push(queueItem);
+      } else {
+        this.queue.splice(insertIndex, 0, queueItem);
+      }
+    } else {
+      this.queue.push(queueItem);
+    }
+    console.log(`[WHATSAPP QUEUE] Mensagem enfileirada: ID ${queueItem.id} | Tipo: ${queueItem.type} | Para: ${queueItem.recipientName} (${queueItem.recipientPhone}) | Posi\xE7\xE3o na fila: ${this.queue.length}`);
+    this.triggerProcessing();
+    return queueItem;
+  }
+  /**
+   * Enfileiramento em lote seguro (para campanhas ou disparos de cobrança em massa)
+   */
+  enqueueBulk(items) {
+    const results = items.map((item) => this.enqueue(item));
+    return results;
+  }
+  /**
+   * Dispara a execução da fila de envio respeitando a vazão de 38 msgs/minuto
+   */
+  async triggerProcessing() {
+    if (this.isProcessing || this.isPaused) return;
+    this.isProcessing = true;
+    try {
+      while (this.queue.length > 0 && !this.isPaused) {
+        this.cleanOldTimestamps();
+        if (this.sentTimestamps.length >= MAX_MESSAGES_PER_MINUTE) {
+          const oldest = this.sentTimestamps[0];
+          const waitTime = Math.max(100, 6e4 - (Date.now() - oldest) + 150);
+          console.log(`[WHATSAPP ANTI-BLOQUEIO META] Limite de ${MAX_MESSAGES_PER_MINUTE} msgs/min atingido! Pausando processador por ${(waitTime / 1e3).toFixed(1)}s para proteger o n\xFAmero contra bloqueio...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+          this.cleanOldTimestamps();
+          continue;
+        }
+        const elapsedSinceLast = Date.now() - this.lastDispatchedAt;
+        if (elapsedSinceLast < MIN_INTERVAL_MS) {
+          const waitInterval = MIN_INTERVAL_MS - elapsedSinceLast;
+          await new Promise((resolve) => setTimeout(resolve, waitInterval));
+        }
+        const item = this.queue.shift();
+        if (!item) break;
+        item.status = "PROCESSING";
+        item.attempts += 1;
+        try {
+          await this.dispatchMessage(item);
+          item.status = "SENT";
+          item.sentAt = (/* @__PURE__ */ new Date()).toISOString();
+          this.totalSent += 1;
+          this.lastDispatchedAt = Date.now();
+          this.sentTimestamps.push(this.lastDispatchedAt);
+          console.log(`[WHATSAPP DISPARADO] Sucesso: ${item.id} -> ${item.recipientName} (${item.recipientPhone}) | Disparos no \xFAltimo minuto: ${this.sentTimestamps.length}/${MAX_MESSAGES_PER_MINUTE} (Meta Max: ${META_HARD_LIMIT})`);
+        } catch (err) {
+          console.error(`[WHATSAPP ERRO] Falha ao enviar ${item.id}:`, err?.message || err);
+          item.error = err?.message || "Erro desconhecido ao enviar mensagem via WhatsApp";
+          if (err?.status === 429 || err?.message?.includes("rate limit") || err?.message?.includes("131053")) {
+            item.status = "RATE_LIMITED";
+            this.queue.unshift(item);
+            console.warn(`[WHATSAPP META 429] Detectado rate limit da Meta. Aguardando 10 segundos antes de tentar novamente...`);
+            await new Promise((resolve) => setTimeout(resolve, 1e4));
+            continue;
+          }
+          if (item.attempts < 3) {
+            item.status = "QUEUED";
+            this.queue.push(item);
+          } else {
+            item.status = "FAILED";
+            this.totalFailed += 1;
+          }
+        }
+        this.history.unshift(item);
+        if (this.history.length > 100) {
+          this.history.pop();
+        }
+      }
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+  /**
+   * Realiza a comunicação HTTP com a API da Meta (ou simulação de alta fidelidade)
+   */
+  async dispatchMessage(item) {
+    const metaToken = process.env.META_WA_ACCESS_TOKEN;
+    const phoneId = process.env.META_WA_PHONE_NUMBER_ID;
+    if (metaToken && phoneId) {
+      const url = `https://graph.facebook.com/v20.0/${phoneId}/messages`;
+      const payload = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: item.recipientPhone,
+        type: "text",
+        text: {
+          preview_url: true,
+          body: item.messageText
+        }
+      };
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${metaToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const status = res.status;
+        const msg = errorData?.error?.message || `Erro HTTP ${status} na Meta Cloud API`;
+        const err = new Error(msg);
+        err.status = status;
+        err.details = errorData;
+        throw err;
+      }
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    console.log(`
+======================================================`);
+    console.log(`[WHATSAPP CLOUD API - DISPARO PROTEGIDO (38 msgs/min)]`);
+    console.log(`Destinat\xE1rio: ${item.recipientName} (${item.recipientPhone})`);
+    console.log(`Tipo: ${item.type} | Curso: ${item.courseTitle || "N/A"}`);
+    console.log(`Texto:
+${item.messageText}`);
+    console.log(`======================================================
+`);
+  }
+  // --- Templates Prontos de Mensagens Homologadas ---
+  /**
+   * Template: Confirmação de Pagamento Recebido (Pix ou Cartão)
+   */
+  generatePaymentConfirmedMessage(order) {
+    const firstName = order.customerName.split(" ")[0] || order.customerName;
+    const valor = order.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return `*Ol\xE1, ${firstName}!* \u{1F44B}
+
+Recebemos com sucesso a confirma\xE7\xE3o do seu pagamento no valor de *${valor}* para o curso:
+\u{1F697} *${order.courseTitle}*
+
+\u{1F4CB} *Status da Matr\xEDcula:* HOMOLOGA\xC7\xC3O EM ANDAMENTO
+Seus dados de CNH (${order.customerCnhNumber || "Registrada"} - Cat. ${order.customerCnhCategory || "B"}) foram encaminhados para a integra\xE7\xE3o com o DETRAN.
+
+\u23F3 Em instantes nossa equipe acad\xEAmica liberar\xE1 suas credenciais oficiais de acesso diretamente aqui neste WhatsApp e no seu e-mail (${order.customerEmail}).
+
+Qualquer d\xFAvida, estamos \xE0 disposi\xE7\xE3o!`;
+  }
+  /**
+   * Template: Envio de Credenciais e Link da Sala de Aula
+   */
+  generateAccessCredentialsMessage(order) {
+    const firstName = order.customerName.split(" ")[0] || order.customerName;
+    return `*Parab\xE9ns, ${firstName}! Seu Acesso foi Liberado!* \u{1F393}\u2705
+
+A sua matr\xEDcula no curso *${order.courseTitle}* foi conclu\xEDda com sucesso.
+
+\u{1F511} *Dados para Iniciar seus Estudos:*
+\u2022 *Ambiente Virtual:* https://ead-cursos-transito.vercel.app
+\u2022 *Seu Login:* ${order.customerCpf}
+\u2022 *Senha Padr\xE3o:* Os 6 primeiros d\xEDgitos do seu CPF
+
+\u{1F4C4} *Comprovante de Matr\xEDcula Oficial:* Dispon\xEDvel a qualquer momento na sua \xC1rea do Aluno com seu CPF.
+
+Bons estudos e conte com nossa equipe de suporte pedag\xF3gico! \u{1F4DA}`;
+  }
+  /**
+   * Template: Recuperação de Cobrança / Link Pix para Pedido Pendente
+   */
+  generatePaymentRecoveryMessage(order) {
+    const firstName = order.customerName.split(" ")[0] || order.customerName;
+    const valor = order.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return `*Ol\xE1, ${firstName}! Tudo bem?* \u{1F44B}
+
+Notamos que voc\xEA iniciou a matr\xEDcula para o curso *${order.courseTitle}* (${valor}), mas o pagamento via Pix ainda n\xE3o foi identificado.
+
+Caso queira garantir sua vaga com valor promocional:
+\u{1F449} *Acesse sua \xE1rea de pagamento:* https://ead-cursos-transito.vercel.app
+
+\u{1F4A1} O curso \xE9 100% online, homologado pela Portaria DETRAN PR e voc\xEA pode estudar direto pelo celular ou computador.
+
+Se precisar de qualquer aux\xEDlio com o Pix ou emiss\xE3o em cart\xE3o, \xE9 s\xF3 nos responder aqui!`;
+  }
+  /**
+   * Obtém a lista atual da fila de espera
+   */
+  getQueue() {
+    return [...this.queue];
+  }
+  /**
+   * Obtém o histórico recente de envios
+   */
+  getHistory() {
+    return [...this.history];
+  }
+  /**
+   * Limpa a fila de mensagens pendentes
+   */
+  clearQueue() {
+    this.queue = [];
+    console.log("[WHATSAPP QUEUE] Fila de mensagens pendentes limpa pelo administrador.");
+  }
+  /**
+   * Pausa ou retoma o processador de fila
+   */
+  setPaused(paused) {
+    this.isPaused = paused;
+    console.log(`[WHATSAPP QUEUE] Status de pausa alterado para: ${paused}`);
+    if (!paused) {
+      this.triggerProcessing();
+    }
+  }
+};
+var whatsappQueueService = new WhatsAppQueueService();
+
 // server/notificationService.ts
 var notificationService = {
+  /**
+   * Dispara notificação de confirmação de pagamento com fila protegida contra bloqueio da Meta (máx 38 msgs/min)
+   */
   sendPaymentConfirmedNotification(data) {
     const firstName = data.customerName.split(" ")[0] || data.customerName;
     const formattedAmount = data.amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-    console.log(`
-======================================================`);
-    console.log(`[DISPARO DE NOTIFICA\xC7\xC3O P\xD3S-PAGAMENTO]`);
-    console.log(`Para: ${data.customerName} (${data.customerEmail} / WhatsApp: ${data.customerWhatsapp})`);
-    console.log(`Curso: ${data.courseTitle} - Pedido: ${data.orderId} - Valor: ${formattedAmount}`);
-    console.log(`------------------------------------------------------`);
-    console.log(`MENSAGEM DE E-MAIL:`);
-    console.log(`Assunto: Pagamento Confirmado! Seu acesso ao curso ${data.courseTitle} est\xE1 sendo preparado.`);
-    console.log(`Ol\xE1 ${firstName},`);
-    console.log(`Confirmamos o recebimento do seu pagamento no valor de ${formattedAmount} via Pix.`);
-    console.log(`Sua matr\xEDcula foi registrada com sucesso no sistema.`);
-    console.log(`IMPORTANTE: Como o curso possui homologa\xE7\xE3o oficial no DETRAN, nossa equipe acad\xEAmica est\xE1 validando os seus dados de CNH.`);
-    console.log(`Em breve (geralmente em alguns minutos), voc\xEA receber\xE1 o seu LINK DE ACESSO e credenciais diretamente no seu WhatsApp (${data.customerWhatsapp}) e neste e-mail.`);
-    console.log(`------------------------------------------------------`);
-    console.log(`MENSAGEM DE WHATSAPP:`);
-    console.log(`*Ol\xE1, ${firstName}!* \u{1F44B}`);
-    console.log(`Recebemos a confirma\xE7\xE3o do seu pagamento do *${data.courseTitle}*!`);
-    console.log(`Seus dados j\xE1 foram encaminhados para a homologa\xE7\xE3o. Em breve voc\xEA receber\xE1 aqui por este WhatsApp o seu link de acesso exclusivo \xE0 plataforma de estudos.`);
-    console.log(`======================================================
-`);
+    const whatsappMessage = `*Ol\xE1, ${firstName}!* \u{1F44B}
+
+Recebemos a confirma\xE7\xE3o do seu pagamento de *${formattedAmount}* para o curso:
+\u{1F697} *${data.courseTitle}*
+
+Seus dados j\xE1 foram encaminhados para homologa\xE7\xE3o do DETRAN. Em instantes voc\xEA receber\xE1 aqui por este WhatsApp o seu link de acesso exclusivo \xE0 plataforma de estudos!
+
+Pedido: *#${data.orderId.slice(-6)}*`;
+    const queueItem = whatsappQueueService.enqueue({
+      orderId: data.orderId,
+      recipientPhone: data.customerWhatsapp,
+      recipientName: data.customerName,
+      courseTitle: data.courseTitle,
+      type: "PAYMENT_CONFIRMATION",
+      messageText: whatsappMessage,
+      priority: "HIGH"
+    });
+    console.log(`[NOTIFICA\xC7\xC3O] Confirma\xE7\xE3o de pagamento enfileirada no WhatsApp Anti-Bloqueio (Fila ID: ${queueItem.id}) para ${data.customerName}`);
     return {
       sent: true,
       channel: "both",
-      message: "Notifica\xE7\xE3o de confirma\xE7\xE3o enviada com sucesso ao aluno.",
+      message: "Notifica\xE7\xE3o de confirma\xE7\xE3o enfileirada com sucesso sob prote\xE7\xE3o anti-bloqueio Meta.",
       recipientEmail: data.customerEmail,
       recipientWhatsapp: data.customerWhatsapp,
+      queueItemId: queueItem.id,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  },
+  /**
+   * Dispara credenciais e liberação de acesso pelo WhatsApp com fila protegida
+   */
+  sendAccessCredentialsNotification(order) {
+    const message = whatsappQueueService.generateAccessCredentialsMessage(order);
+    const queueItem = whatsappQueueService.enqueue({
+      orderId: order.id,
+      recipientPhone: order.customerWhatsapp,
+      recipientName: order.customerName,
+      courseTitle: order.courseTitle,
+      type: "ACCESS_CREDENTIALS",
+      messageText: message,
+      priority: "HIGH"
+    });
+    return {
+      sent: true,
+      channel: "whatsapp",
+      message: "Libera\xE7\xE3o de acesso enfileirada com sucesso na fila do WhatsApp.",
+      recipientEmail: order.customerEmail,
+      recipientWhatsapp: order.customerWhatsapp,
+      queueItemId: queueItem.id,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  },
+  /**
+   * Dispara lembrete de recuperação de pagamento via WhatsApp com fila protegida
+   */
+  sendPaymentRecoveryNotification(order) {
+    const message = whatsappQueueService.generatePaymentRecoveryMessage(order);
+    const queueItem = whatsappQueueService.enqueue({
+      orderId: order.id,
+      recipientPhone: order.customerWhatsapp,
+      recipientName: order.customerName,
+      courseTitle: order.courseTitle,
+      type: "PAYMENT_RECOVERY",
+      messageText: message,
+      priority: "NORMAL"
+    });
+    return {
+      sent: true,
+      channel: "whatsapp",
+      message: "Lembrete de recupera\xE7\xE3o enfileirado com sucesso na fila do WhatsApp.",
+      recipientEmail: order.customerEmail,
+      recipientWhatsapp: order.customerWhatsapp,
+      queueItemId: queueItem.id,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
@@ -1777,25 +2151,19 @@ async function testSupabaseConnection(req, res) {
 }
 
 // server/app.ts
-import_dotenv2.default.config();
-var app = (0, import_express.default)();
+dotenv2.config();
+var app = express();
 app.use((req, res, next) => {
   if (req.body && typeof req.body === "object") {
     return next();
   }
-  import_express.default.json({ limit: "10mb" })(req, res, next);
+  express.json({ limit: "10mb" })(req, res, next);
 });
-app.use(import_express.default.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -1805,13 +2173,9 @@ var PORT = 3e3;
 var appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
 var ADMIN_USER = process.env.ADMIN_USER || "admin";
 var ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
-var apiRouter = import_express.default.Router();
+var apiRouter = express.Router();
 apiRouter.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: process.uptime(),
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
-  });
+  res.json({ status: "ok", uptime: process.uptime(), timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
 apiRouter.get("/gateways/config-status", (req, res) => {
   const currentAppUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
@@ -1823,59 +2187,75 @@ apiRouter.get("/gateways/config-status", (req, res) => {
   res.json({ mercadoPago, supabase });
 });
 apiRouter.get("/supabase/test", testSupabaseConnection);
-apiRouter.get("/courses", (req, res) => {
-  const includeInactive = req.query.includeInactive === "true";
-  res.json(db.getCourses(includeInactive));
+apiRouter.get("/courses", async (req, res) => {
+  try {
+    const includeInactive = req.query.includeInactive === "true";
+    const courses = await db.getCourses(includeInactive);
+    res.json(courses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
-apiRouter.get("/courses/:id", (req, res) => {
-  const course = db.getCourseById(req.params.id);
-  if (!course) return res.status(404).json({ error: "Curso n\xE3o encontrado." });
-  res.json(course);
+apiRouter.get("/courses/:id", async (req, res) => {
+  try {
+    const course = await db.getCourseById(req.params.id);
+    if (!course) return res.status(404).json({ error: "Curso n\xE3o encontrado." });
+    res.json(course);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 apiRouter.put("/courses/:id", async (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
   try {
+    const { id } = req.params;
+    const updates = req.body;
     const updatedCourse = await db.updateCourse(id, updates);
     if (!updatedCourse) {
       return res.status(404).json({ error: "Curso n\xE3o encontrado para atualiza\xE7\xE3o." });
     }
     res.json({ success: true, course: updatedCourse });
   } catch (err) {
-    console.error("Erro ao atualizar curso:", err);
-    res.status(500).json({ error: err.message || "Erro ao atualizar curso." });
+    res.status(500).json({ error: err.message });
   }
 });
-apiRouter.post("/courses", (req, res) => {
+apiRouter.post("/courses", async (req, res) => {
   try {
     const newCourseData = req.body;
     if (!newCourseData.title || !newCourseData.category) {
       return res.status(400).json({ error: "T\xEDtulo e Categoria s\xE3o obrigat\xF3rios." });
     }
-    const created = db.createCourse(newCourseData);
+    const created = await db.createCourse(newCourseData);
     res.status(201).json({ success: true, course: created });
   } catch (err) {
     console.error("Erro ao cadastrar curso:", err);
     res.status(500).json({ error: err.message || "Erro ao cadastrar novo curso." });
   }
 });
-var handleToggleActive = (req, res) => {
-  const { id } = req.params;
-  const result = db.toggleCourseActive(id);
-  if (!result.success) {
-    return res.status(404).json({ error: "Curso n\xE3o encontrado." });
+var handleToggleActive = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.toggleCourseActive(id);
+    if (!result.success) {
+      return res.status(404).json({ error: "Curso n\xE3o encontrado." });
+    }
+    res.json({ success: true, isActive: result.isActive, course: result.course });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ success: true, isActive: result.isActive, course: result.course });
 };
 apiRouter.patch("/courses/:id/toggle-active", handleToggleActive);
 apiRouter.put("/courses/:id/toggle-active", handleToggleActive);
-apiRouter.delete("/courses/:id", (req, res) => {
-  const { id } = req.params;
-  const success = db.deleteCourse(id);
-  if (!success) {
-    return res.status(404).json({ error: "Curso n\xE3o encontrado para exclus\xE3o." });
+apiRouter.delete("/courses/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const success = await db.deleteCourse(id);
+    if (!success) {
+      return res.status(404).json({ error: "Curso n\xE3o encontrado para exclus\xE3o." });
+    }
+    res.json({ success: true, message: "Curso exclu\xEDdo com sucesso." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ success: true, message: "Curso exclu\xEDdo com sucesso." });
 });
 apiRouter.get("/students/check", async (req, res) => {
   const cpf = req.query.cpf;
@@ -1900,17 +2280,19 @@ apiRouter.get("/students/check", async (req, res) => {
   }
 });
 apiRouter.get("/student/portal", async (req, res) => {
-  const cpf = req.query.cpf;
+  const cpf = req.query.cpf || req.query.formattedCpf;
   if (!cpf) {
     return res.status(400).json({ error: "CPF \xE9 obrigat\xF3rio para acessar o painel do aluno." });
   }
   try {
     const data = await db.getStudentPortalData(cpf);
     if (!data.authorized) {
-      return res.status(403).json({
+      return res.status(200).json({
         success: false,
         authorized: false,
-        error: "Acesso n\xE3o autorizado: CPF n\xE3o encontrado no banco de dados Supabase nem no Painel Administrativo. A \xC1rea do Aluno \xE9 de acesso restrito a condutores cadastrados.",
+        student: null,
+        orders: [],
+        error: "CPF n\xE3o encontrado no sistema. A \xC1rea do Aluno \xE9 de acesso restrito a condutores cadastrados.",
         registeredInSupabase: data.registeredInSupabase,
         registeredInAdmin: data.registeredInAdmin
       });
@@ -1925,9 +2307,7 @@ apiRouter.get("/student/portal", async (req, res) => {
     });
   } catch (err) {
     console.error("Erro ao verificar autoriza\xE7\xE3o do aluno:", err);
-    return res.status(500).json({
-      error: err.message || "Erro ao consultar autoriza\xE7\xE3o no banco de dados"
-    });
+    return res.status(500).json({ error: err.message || "Erro ao consultar autoriza\xE7\xE3o no banco de dados" });
   }
 });
 apiRouter.post("/pix/create", async (req, res) => {
@@ -1949,14 +2329,11 @@ apiRouter.post("/pix/create", async (req, res) => {
         error: "Campos obrigat\xF3rios: Nome, E-mail, CPF e ID do Curso."
       });
     }
-    const course = db.getCourseById(courseId);
+    const course = await db.getCourseById(courseId);
     if (!course) {
       return res.status(404).json({ error: "Curso selecionado n\xE3o foi encontrado no cat\xE1logo." });
     }
-    const existingOrder = await db.findActiveOrderByCpfAndCourse(
-      customerCpf,
-      courseId
-    );
+    const existingOrder = await db.findActiveOrderByCpfAndCourse(customerCpf, courseId);
     if (existingOrder) {
       if (existingOrder.status === "PAID") {
         return res.status(409).json({
@@ -2058,18 +2435,15 @@ apiRouter.get("/orders/:id", async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
-apiRouter.get("/pix/status/:txid", async (req, res) => {
+apiRouter.get("/pix/status/:txid", (req, res) => {
   const { txid } = req.params;
-  try {
-    const order = await db.getOrderByTxid(txid);
-    if (!order) {
-      return res.status(404).json({ error: "Matr\xEDcula n\xE3o encontrada." });
-    }
-    return res.json({ order });
-  } catch (err) {
-    console.error("Erro ao consultar status do pedido:", err);
-    return res.status(500).json({ error: err.message });
+  const order = db.getOrderByTxid(txid);
+  if (!order) {
+    return res.status(404).json({ error: "Matr\xEDcula n\xE3o encontrada." });
   }
+  return res.json({
+    order
+  });
 });
 apiRouter.post("/orders/:orderId/status", (req, res) => {
   const { orderId } = req.params;
@@ -2095,18 +2469,12 @@ var handleWebhookGet = (req, res) => {
 var handleWebhookPost = async (req, res) => {
   const payload = req.body || {};
   const query = req.query || {};
-  console.log(
-    "[WEBHOOK MERCADO PAGO RECEBIDO]",
-    JSON.stringify({ body: payload, query }, null, 2)
-  );
+  console.log("[WEBHOOK MERCADO PAGO RECEBIDO]", JSON.stringify({ body: payload, query }, null, 2));
   try {
     const paymentId = payload?.data?.id || payload?.id || (query.topic === "payment" ? query.id : null);
     const isMercadoPagoTest = payload?.live_mode === false || paymentId === "123456" || payload?.action === "payment.updated" && (!paymentId || paymentId === "123456");
     if (isMercadoPagoTest) {
-      console.log(
-        "[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:",
-        payload
-      );
+      console.log("[MERCADO PAGO TESTE RECEBIDO] Teste de webhook validado com sucesso:", payload);
       db.addWebhookLog({
         gateway: "MERCADO_PAGO",
         endpoint: req.originalUrl || "/api/webhooks/mercadopago",
@@ -2133,9 +2501,7 @@ var handleWebhookPost = async (req, res) => {
       });
       return res.status(200).send("OK");
     }
-    const mpDetails = await mercadoPagoService.getPaymentDetails(
-      String(paymentId)
-    );
+    const mpDetails = await mercadoPagoService.getPaymentDetails(String(paymentId));
     const externalReference = mpDetails?.external_reference || payload?.external_reference;
     const mpStatus = mpDetails?.status || "approved";
     const paymentType = mpDetails?.payment_type_id || "bank_transfer";
@@ -2153,10 +2519,7 @@ var handleWebhookPost = async (req, res) => {
         if (paymentType === "credit_card") methodLabel = "CREDIT_CARD";
         else if (paymentType === "debit_card") methodLabel = "DEBIT_CARD";
         foundOrder.paymentMethod = methodLabel;
-        const { order } = await db.markOrderAsPaid(
-          foundOrder.id,
-          String(paymentId)
-        );
+        const { order } = await db.markOrderAsPaid(foundOrder.id, String(paymentId));
         if (order) {
           order.paymentMethod = methodLabel;
           notificationService.sendPaymentConfirmedNotification({
@@ -2177,17 +2540,9 @@ var handleWebhookPost = async (req, res) => {
           statusMessage: `Pagamento #${paymentId} Aprovado (${paymentType.toUpperCase()} / ${paymentMethod.toUpperCase()}).`,
           rawPayload: { body: payload, query, mpDetails }
         });
-        return res.status(200).json({
-          status: "PROCESSED",
-          orderId: order?.id,
-          method: methodLabel
-        });
+        return res.status(200).json({ status: "PROCESSED", orderId: order?.id, method: methodLabel });
       } else if (mpStatus === "rejected") {
-        await db.updateOrderStatus(
-          foundOrder.id,
-          "ERROR",
-          "Pagamento recusado pela operadora do cart\xE3o ou banco emissor."
-        );
+        await db.updateOrderStatus(foundOrder.id, "ERROR", "Pagamento recusado pela operadora do cart\xE3o ou banco emissor.");
         db.addWebhookLog({
           gateway: "MERCADO_PAGO",
           endpoint: req.originalUrl || "/api/webhooks/mercadopago",
@@ -2241,21 +2596,15 @@ webhookPaths.forEach((p) => {
 });
 apiRouter.post("/simulador/pagar-pix", async (req, res) => {
   const { txid } = req.body;
-  const order = await db.getOrderByTxid(txid);
+  const order = db.getOrderByTxid(txid);
   if (!order) {
     return res.status(404).json({ error: "Pedido n\xE3o encontrado para o txid informado." });
   }
   if (order.status === "PAID") {
-    return res.json({
-      message: "Pedido j\xE1 se encontra marcado como PAGO.",
-      order
-    });
+    return res.json({ message: "Pedido j\xE1 se encontra marcado como PAGO.", order });
   }
   const simulatedMpPaymentId = order.mercadoPagoPaymentId || `998877${Date.now()}`;
-  const { order: paidOrder } = await db.markOrderAsPaid(
-    order.id,
-    simulatedMpPaymentId
-  );
+  const { order: paidOrder } = await db.markOrderAsPaid(order.id, simulatedMpPaymentId);
   if (paidOrder) {
     notificationService.sendPaymentConfirmedNotification({
       customerName: paidOrder.customerName,
@@ -2278,8 +2627,7 @@ apiRouter.post("/simulador/pagar-pix", async (req, res) => {
   return res.json({
     success: true,
     message: "Pagamento confirmado e notifica\xE7\xE3o enviada!",
-    order: await db.getOrderByTxid(order.id)
-    // <-- await adicionado
+    order: db.getOrderByTxid(order.id)
   });
 });
 apiRouter.post("/admin/login", (req, res) => {
@@ -2302,28 +2650,124 @@ var requireAdminAuth = (req, res, next) => {
   }
   next();
 };
-apiRouter.post(
-  "/admin/orders/:orderId/mark-dispatched",
-  requireAdminAuth,
-  (req, res) => {
-    const { orderId } = req.params;
-    const order = db.markAccessAsDispatched(orderId);
-    if (!order)
-      return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
-    res.json({
-      order,
-      message: "Status atualizado para: Acesso Enviado Manualmente."
-    });
+apiRouter.post("/admin/orders/:orderId/mark-dispatched", requireAdminAuth, async (req, res) => {
+  const { orderId } = req.params;
+  const order = await db.markAccessAsDispatched(orderId);
+  if (!order) return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
+  res.json({ order, message: "Status atualizado para: Acesso Enviado Manualmente." });
+});
+apiRouter.post("/admin/orders/:orderId/dispatch-whatsapp", requireAdminAuth, async (req, res) => {
+  const { orderId } = req.params;
+  const order = db.getOrderByTxid(orderId) || Array.from(db["orders"].values()).find((o) => o.id === orderId);
+  if (!order) return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
+  const updated = await db.markAccessAsDispatched(order.id) || order;
+  const notifResult = notificationService.sendAccessCredentialsNotification(updated);
+  res.json({
+    success: true,
+    order: updated,
+    notification: notifResult,
+    stats: whatsappQueueService.getStats(),
+    message: `Credenciais enfileiradas no WhatsApp com prote\xE7\xE3o anti-bloqueio (Fila ID: ${notifResult.queueItemId}).`
+  });
+});
+apiRouter.post("/admin/orders/:orderId/send-recovery-whatsapp", requireAdminAuth, (req, res) => {
+  const { orderId } = req.params;
+  const order = db.getOrderByTxid(orderId) || Array.from(db["orders"].values()).find((o) => o.id === orderId);
+  if (!order) return res.status(404).json({ error: "Pedido n\xE3o encontrado." });
+  const notifResult = notificationService.sendPaymentRecoveryNotification(order);
+  res.json({
+    success: true,
+    order,
+    notification: notifResult,
+    stats: whatsappQueueService.getStats(),
+    message: `Lembrete Pix enfileirado no WhatsApp com prote\xE7\xE3o anti-bloqueio (Fila ID: ${notifResult.queueItemId}).`
+  });
+});
+apiRouter.post("/admin/whatsapp/batch-dispatch", requireAdminAuth, async (req, res) => {
+  const { orderIds, actionType } = req.body;
+  if (!Array.isArray(orderIds) || orderIds.length === 0) {
+    return res.status(400).json({ error: "Lista de IDs de pedidos inv\xE1lida para disparo em lote." });
   }
-);
+  const allOrders = await db.getAllOrdersAsync();
+  const targetOrders = allOrders.filter((o) => orderIds.includes(o.id));
+  let enqueuedCount = 0;
+  for (const ord of targetOrders) {
+    if (actionType === "ACCESS" && ord.status === "PAID") {
+      await db.markAccessAsDispatched(ord.id);
+      notificationService.sendAccessCredentialsNotification(ord);
+      enqueuedCount++;
+    } else if (actionType === "RECOVERY" && ord.status === "PENDING") {
+      notificationService.sendPaymentRecoveryNotification(ord);
+      enqueuedCount++;
+    }
+  }
+  const stats = whatsappQueueService.getStats();
+  res.json({
+    success: true,
+    enqueuedCount,
+    actionType,
+    stats,
+    message: `${enqueuedCount} mensagens enfileiradas com sucesso. O sistema disparar\xE1 a uma taxa m\xE1xima segura de 38 msgs/minuto para cumprir as regras da Meta.`
+  });
+});
+apiRouter.get("/admin/whatsapp/status", requireAdminAuth, (req, res) => {
+  const stats = whatsappQueueService.getStats();
+  const queue = whatsappQueueService.getQueue();
+  const history = whatsappQueueService.getHistory().slice(0, 30);
+  res.json({
+    success: true,
+    stats,
+    queue,
+    history
+  });
+});
+apiRouter.post("/admin/whatsapp/enqueue", requireAdminAuth, (req, res) => {
+  const { recipientPhone, recipientName, courseTitle, type, messageText, priority } = req.body;
+  if (!recipientPhone || !recipientName || !messageText) {
+    return res.status(400).json({ error: "Telefone, nome e texto da mensagem s\xE3o obrigat\xF3rios." });
+  }
+  const queueItem = whatsappQueueService.enqueue({
+    recipientPhone,
+    recipientName,
+    courseTitle,
+    type: type || "CUSTOM",
+    messageText,
+    priority: priority || "NORMAL"
+  });
+  res.json({
+    success: true,
+    queueItem,
+    stats: whatsappQueueService.getStats(),
+    message: "Mensagem adicionada com sucesso \xE0 fila anti-bloqueio."
+  });
+});
+apiRouter.post("/admin/whatsapp/toggle-pause", requireAdminAuth, (req, res) => {
+  const { paused } = req.body;
+  whatsappQueueService.setPaused(Boolean(paused));
+  res.json({
+    success: true,
+    stats: whatsappQueueService.getStats(),
+    message: paused ? "Fila de disparo pausada." : "Fila de disparo retomada."
+  });
+});
+apiRouter.post("/admin/whatsapp/clear-queue", requireAdminAuth, (req, res) => {
+  whatsappQueueService.clearQueue();
+  res.json({
+    success: true,
+    stats: whatsappQueueService.getStats(),
+    message: "Fila de mensagens pendentes esvaziada com sucesso."
+  });
+});
 apiRouter.get("/admin/overview", requireAdminAuth, async (req, res) => {
   const orders = await db.getAllOrdersAsync();
   const webhookLogs = db.getWebhookLogs();
   const effectiveAppUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}` || appUrl;
   const mpConfig = mercadoPagoService.getConfigStatus(effectiveAppUrl);
+  const whatsappStats = whatsappQueueService.getStats();
   res.json({
     orders,
     webhookLogs,
+    whatsappStats,
     configStatus: {
       mercadoPago: mpConfig
     }
@@ -2331,7 +2775,17 @@ apiRouter.get("/admin/overview", requireAdminAuth, async (req, res) => {
 });
 app.use("/api", apiRouter);
 app.use("/", apiRouter);
+app.use((err, req, res, next) => {
+  console.error("[ERRO SERVIDOR API]:", err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 500).json({
+    error: err.message || "Erro interno ao processar requisi\xE7\xE3o no servidor.",
+    code: err.code || "INTERNAL_SERVER_ERROR"
+  });
+});
 var app_default = app;
-
-// api/_handler.ts
-var handler_default = app_default;
+export {
+  app_default as default
+};

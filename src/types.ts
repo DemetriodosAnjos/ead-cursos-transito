@@ -138,3 +138,42 @@ export interface InterConfigStatus {
   pixKey: string;
   webhookUrl: string;
 }
+
+export type WhatsAppMessageType = 
+  | 'PAYMENT_CONFIRMATION' 
+  | 'ACCESS_CREDENTIALS' 
+  | 'PAYMENT_RECOVERY' 
+  | 'HOMOLOGATION_UPDATE'
+  | 'CUSTOM';
+
+export interface WhatsAppQueueItem {
+  id: string;
+  orderId?: string;
+  recipientPhone: string;
+  recipientName: string;
+  courseTitle?: string;
+  type: WhatsAppMessageType;
+  messageText: string;
+  status: 'QUEUED' | 'PROCESSING' | 'SENT' | 'FAILED' | 'RATE_LIMITED';
+  priority: 'HIGH' | 'NORMAL' | 'LOW';
+  enqueuedAt: string;
+  sentAt?: string;
+  attempts: number;
+  error?: string;
+}
+
+export interface WhatsAppQueueStats {
+  queuedCount: number;
+  sentLastMinute: number;
+  maxPerMinute: number;
+  metaHardLimit: number;
+  safeMarginPerMinute: number;
+  protectionStatus: 'SAFE' | 'THROTTLING' | 'PAUSED';
+  totalSent: number;
+  totalFailed: number;
+  minIntervalMs: number;
+  estimatedDrainTimeSeconds: number;
+  isPaused: boolean;
+  lastDispatchedAt?: string;
+}
+

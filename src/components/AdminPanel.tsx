@@ -23,10 +23,12 @@ import {
   Phone,
   Search,
   FileText,
-  GraduationCap
+  GraduationCap,
+  ShieldCheck
 } from 'lucide-react';
 import { Order, WebhookLog, Course } from '../types';
 import { AdminCoursesTable } from './AdminCoursesTable';
+import { AdminWhatsAppMonitor } from './AdminWhatsAppMonitor';
 
 // Formatador de CPF: 000.000.000-00
 const formatCPF = (val?: string) => {
@@ -129,8 +131,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Seção Ativa: Cursos & Preços por padrão, Matrículas ou Logs
-  const [activeSection, setActiveSection] = useState<'courses' | 'orders' | 'logs'>('courses');
+  // Seção Ativa: Cursos & Preços por padrão, Matrículas, WhatsApp Anti-Bloqueio ou Logs
+  const [activeSection, setActiveSection] = useState<'courses' | 'orders' | 'whatsapp' | 'logs'>('courses');
 
   // Gerenciamento dos Cursos
   const [courses, setCourses] = useState<Course[]>(propCourses || []);
@@ -286,6 +288,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       console.error('Erro ao atualizar envio manual:', err);
     } finally {
       setDispatchingId(null);
+    }
+  };
+
+  const handleDispatchWhatsApp = async (orderId: string) => {
+    if (!authToken) return;
+    setDispatchingId(orderId);
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/dispatch-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        fetchOverview();
+      } else {
+        alert(data.error || 'Erro ao enfileirar disparo no WhatsApp.');
+      }
+    } catch (err) {
+      console.error('Erro ao disparar WhatsApp seguro:', err);
+    } finally {
+      setDispatchingId(null);
+    }
+  };
+
+  const handleSendRecoveryWhatsApp = async (orderId: string) => {
+    if (!authToken) return;
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}/send-recovery-whatsapp`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Lembrete Pix enfileirado no WhatsApp com sucesso!');
+        fetchOverview();
+      } else {
+        alert(data.error || 'Erro ao enfileirar cobrança Pix no WhatsApp.');
+      }
+    } catch (err) {
+      console.error('Erro ao disparar lembrete WhatsApp:', err);
     }
   };
 
@@ -467,6 +513,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
 
         <button
+          id="tab-section-whatsapp"
+          onClick={() => setActiveSection('whatsapp')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+            activeSection === 'whatsapp'
+              ? 'bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-950/50'
+              : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span>Fila WhatsApp (Meta 38/min)</span>
+        </button>
+
+        <button
           id="tab-section-logs"
           onClick={() => setActiveSection('logs')}
           className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
@@ -492,7 +551,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         />
       )}
 
-      {/* SEÇÃO 2: MATRÍCULAS E ALUNOS CNH */}
+      {/* SEÇÃO 2: FILA WHATSAPP & PROTEÇÃO ANTI-BLOQUEIO META (38 MSGS/MIN) */}
+      {activeSection === 'whatsapp' && (
+        <AdminWhatsAppMonitor
+          authToken={authToken}
+          orders={orders}
+          onOrderUpdated={fetchOverview}
+        />
+      )}
+
+      {/* SEÇÃO 3: MATRÍCULAS E ALUNOS CNH */}
       {activeSection === 'orders' && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
         <div className="p-4 border-b border-zinc-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
@@ -711,23 +779,46 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       )}
                     </td>
 
-                    {/* 7. AÇÕES / ENVIO MANUAL */}
+                    {/* 7. AÇÕES / ENVIO MANUAL E WHATSAPP SEGURO */}
                     <td className="p-3 text-right align-top whitespace-nowrap">
                       {ord.status === 'PAID' ? (
                         ord.accessDispatchedStatus === 'ENVIADO' ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px] font-bold">
-                            <Check className="w-3.5 h-3.5" /> Acesso Enviado
-                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px] font-bold bg-emerald-950/50 px-2 py-1 rounded border border-emerald-800/40">
+                              <Check className="w-3.5 h-3.5" /> Acesso Enviado
+                            </span>
+                            <button
+                              id={`redispatch-wa-btn-${ord.id}`}
+                              onClick={() => handleDispatchWhatsApp(ord.id)}
+                              disabled={dispatchingId === ord.id}
+                              title="Reenviar credenciais no WhatsApp (Cadenciado 38/min)"
+                              className="text-zinc-400 hover:text-emerald-300 text-[10px] underline"
+                            >
+                              Reenviar
+                            </button>
+                          </div>
                         ) : (
-                          <button
-                            id={`dispatch-btn-${ord.id}`}
-                            onClick={() => handleMarkAsDispatched(ord.id)}
-                            disabled={dispatchingId === ord.id}
-                            className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold px-2.5 py-1.5 rounded text-[11px] inline-flex items-center gap-1 shadow transition-colors"
-                          >
-                            <Send className="w-3 h-3" />
-                            <span>{dispatchingId === ord.id ? 'Marcando...' : 'Marcar Acesso Enviado'}</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                            <button
+                              id={`dispatch-wa-btn-${ord.id}`}
+                              onClick={() => handleDispatchWhatsApp(ord.id)}
+                              disabled={dispatchingId === ord.id}
+                              title="Disparar credenciais pelo WhatsApp com proteção anti-bloqueio Meta (máx 38/min)"
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-2.5 py-1.5 rounded text-[11px] inline-flex items-center gap-1.5 shadow-md shadow-emerald-950/40 transition-colors disabled:opacity-50"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+                              <span>{dispatchingId === ord.id ? 'Enfileirando...' : 'Disparar WhatsApp (38/min)'}</span>
+                            </button>
+                            <button
+                              id={`dispatch-manual-btn-${ord.id}`}
+                              onClick={() => handleMarkAsDispatched(ord.id)}
+                              disabled={dispatchingId === ord.id}
+                              title="Marcar como enviado manualmente sem acionar automação"
+                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 font-semibold px-2 py-1.5 rounded text-[10px] inline-flex items-center gap-1 border border-zinc-700 transition-colors"
+                            >
+                              <span>Manual</span>
+                            </button>
+                          </div>
                         )
                       ) : (
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
@@ -751,13 +842,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </button>
 
                           <button
+                            id={`whatsapp-auto-recovery-btn-${ord.id}`}
+                            onClick={() => handleSendRecoveryWhatsApp(ord.id)}
+                            title="Enfileirar cobrança automática no WhatsApp sob teto seguro de 38 msgs/min"
+                            className="bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded inline-flex items-center gap-1 border border-emerald-800/80 shadow-sm transition-colors"
+                          >
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                            <span>Cobrar WhatsApp</span>
+                          </button>
+
+                          <button
                             id={`whatsapp-order-btn-${ord.id}`}
                             onClick={() => handleWhatsAppRecovery(ord)}
-                            title="Reenviar Cobrança no WhatsApp do Aluno"
-                            className="bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 text-[11px] font-bold px-2.5 py-1 rounded inline-flex items-center gap-1 border border-emerald-800/60 shadow-sm transition-colors"
+                            title="Abrir WhatsApp Web manualmente"
+                            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[11px] font-semibold px-2 py-1 rounded inline-flex items-center gap-1 border border-zinc-700 transition-colors"
                           >
-                            <MessageSquare className="w-3 h-3 text-emerald-400" />
-                            <span>WhatsApp</span>
+                            <ExternalLink className="w-3 h-3 text-zinc-400" />
+                            <span>Web</span>
                           </button>
                         </div>
                       )}

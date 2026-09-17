@@ -1,29 +1,27 @@
-import React, { useState, useEffect } from "react";
-import {
-  X,
-  GraduationCap,
-  UserCheck,
-  BookOpen,
-  CheckCircle,
-  Clock,
-  CreditCard,
-  Award,
-  ShieldCheck,
-  ArrowRight,
-  PlayCircle,
-  Sparkles,
-  LogOut,
-  PlusCircle,
+import React, { useState, useEffect } from 'react';
+import { 
+  X, 
+  GraduationCap, 
+  UserCheck, 
+  BookOpen, 
+  CheckCircle, 
+  Clock, 
+  CreditCard, 
+  ShieldCheck, 
+  ArrowRight, 
+  Sparkles, 
+  LogOut, 
+  PlusCircle, 
   ChevronRight,
   AlertCircle,
   FileCheck,
+  Printer,
   Download,
   Share2,
   Lock,
-  Search,
-} from "lucide-react";
-import { Order, Course } from "../types";
-import { COURSES } from "../data/courses";
+  Search
+} from 'lucide-react';
+import { Order, Course } from '../types';
 
 interface StudentPortalModalProps {
   isOpen: boolean;
@@ -31,6 +29,7 @@ interface StudentPortalModalProps {
   onOpenPayment: (order: Order) => void;
   onSelectNewCourse: (course: Course, studentCpf?: string) => void;
   initialCpf?: string;
+  courses?: Course[];
 }
 
 export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
@@ -38,7 +37,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   onClose,
   onOpenPayment,
   onSelectNewCourse,
-  initialCpf = "",
+  initialCpf = '',
+  courses: propCourses,
 }) => {
   const [cpfInput, setCpfInput] = useState(initialCpf);
   const [activeCpf, setActiveCpf] = useState<string | null>(null);
@@ -46,20 +46,33 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [filterTab, setFilterTab] = useState<"all" | "paid" | "pending">("all");
+  const [filterTab, setFilterTab] = useState<'all' | 'paid' | 'pending'>('all');
+  
+  // Catálogo com Supabase como única fonte de verdade
+  const [coursesList, setCoursesList] = useState<Course[]>(propCourses || []);
 
-  // Estado para visualização de Certificado ou Sala de Aula
-  const [viewingCertificate, setViewingCertificate] = useState<Order | null>(
-    null,
-  );
-  const [activeClassroomCourse, setActiveClassroomCourse] =
-    useState<Order | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
+  // Estado para visualização do Comprovante de Matrícula & Pagamento
+  const [viewingReceipt, setViewingReceipt] = useState<Order | null>(null);
+
+  useEffect(() => {
+    if (propCourses && propCourses.length > 0) {
+      setCoursesList(propCourses);
+    } else {
+      fetch('/api/courses')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setCoursesList(data);
+          }
+        })
+        .catch(err => console.error('Erro ao sincronizar catálogo do Supabase:', err));
+    }
+  }, [propCourses]);
 
   // Carrega CPF salvo no localStorage
   useEffect(() => {
     if (isOpen) {
-      const savedCpf = localStorage.getItem("ead_student_cpf") || initialCpf;
+      const savedCpf = localStorage.getItem('ead_student_cpf') || initialCpf;
       if (savedCpf) {
         setCpfInput(savedCpf);
         handleLoadPortal(savedCpf);
@@ -70,17 +83,17 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
   if (!isOpen) return null;
 
   const formatCPF = (val: string) => {
-    const clean = val.replace(/\D/g, "").slice(0, 11);
+    const clean = val.replace(/\D/g, '').slice(0, 11);
     return clean
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   };
 
   const handleLoadPortal = async (cpfToLoad: string) => {
-    const clean = cpfToLoad.replace(/\D/g, "");
+    const clean = cpfToLoad.replace(/\D/g, '');
     if (clean.length !== 11) {
-      setErrorMsg("Informe um CPF válido com 11 dígitos.");
+      setErrorMsg('Informe um CPF válido com 11 dígitos.');
       return;
     }
 
@@ -88,67 +101,75 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
     setErrorMsg(null);
 
     try {
-      const res = await fetch(`/api/student/portal?cpf=${clean}`);
-      const data = await res.json();
+      const formatted = formatCPF(clean);
+      const res = await fetch(`/api/student/portal?cpf=${clean}&formattedCpf=${encodeURIComponent(formatted)}`);
+      
+      let data: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        console.warn('Resposta não-JSON ao consultar portal do aluno:', res.status, text.slice(0, 120));
+        if (res.status === 404 || res.status === 500 || res.status === 502 || res.status === 503) {
+          throw new Error('O servidor está processando uma inicialização. Aguarde alguns segundos e tente novamente.');
+        }
+        throw new Error('Não foi possível obter resposta do servidor. Tente novamente.');
+      }
 
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao carregar o portal do aluno.");
+      if (!res.ok || data?.authorized === false) {
+        throw new Error(data?.error || 'Nenhum cadastro ou matrícula encontrada para este CPF. Escolha um curso para iniciar!');
       }
 
       setStudent(data.student);
       setOrders(data.orders || []);
       setActiveCpf(clean);
-      localStorage.setItem("ead_student_cpf", clean);
+      localStorage.setItem('ead_student_cpf', clean);
 
       if (!data.student && (!data.orders || data.orders.length === 0)) {
-        setErrorMsg(
-          "Nenhum cadastro ou curso encontrado para este CPF. Escolha um curso para iniciar sua matrícula!",
-        );
+        setErrorMsg('Nenhum cadastro ou curso encontrado para este CPF. Escolha um curso para iniciar sua matrícula!');
       }
     } catch (err: any) {
-      console.error("Erro no portal do aluno:", err);
-      setErrorMsg(err.message || "Falha ao consultar dados do aluno.");
+      console.error('Erro no portal do aluno:', err);
+      setErrorMsg(err.message || 'Falha ao consultar dados do aluno.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("ead_student_cpf");
+    localStorage.removeItem('ead_student_cpf');
     setActiveCpf(null);
     setStudent(null);
     setOrders([]);
-    setCpfInput("");
-    setViewingCertificate(null);
-    setActiveClassroomCourse(null);
+    setCpfInput('');
+    setViewingReceipt(null);
   };
 
   // Cursos filtrados
-  const paidOrders = orders.filter((o) => o.status === "PAID");
-  const pendingOrders = orders.filter((o) => o.status !== "PAID");
+  const paidOrders = orders.filter(o => o.status === 'PAID');
+  const pendingOrders = orders.filter(o => o.status !== 'PAID');
 
-  const displayedOrders =
-    filterTab === "all"
-      ? orders
-      : filterTab === "paid"
-        ? paidOrders
-        : pendingOrders;
+  const displayedOrders = filterTab === 'all' 
+    ? orders 
+    : filterTab === 'paid' 
+      ? paidOrders 
+      : pendingOrders;
 
   // Carga horária total acumulada
   const totalHours = paidOrders.reduce((acc, curr) => {
-    const course = COURSES.find((c) => c.id === curr.courseId);
+    const course = coursesList.find(c => c.id === curr.courseId);
     return acc + (course?.workloadHours || 50);
   }, 0);
 
   // Sugestões de novos cursos que o aluno ainda não comprou
-  const enrolledCourseIds = new Set(orders.map((o) => o.courseId));
-  const suggestedCourses = COURSES.filter(
-    (c) => !enrolledCourseIds.has(c.id),
-  ).slice(0, 3);
+  const enrolledCourseIds = new Set(orders.map(o => o.courseId));
+  const suggestedCourses = coursesList.filter(c => !enrolledCourseIds.has(c.id)).slice(0, 3);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-fadeIn">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-5xl overflow-hidden shadow-2xl my-auto text-zinc-100 flex flex-col max-h-[92vh]">
+        
         {/* HEADER DO PORTAL */}
         <div className="px-5 py-4 sm:px-6 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border-b border-zinc-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -165,8 +186,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-zinc-400">
-                Histórico de matrículas, sala de aula virtual e certificados
-                oficiais
+                Histórico de matrículas, sala de aula virtual e certificados oficiais
               </p>
             </div>
           </div>
@@ -193,6 +213,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
         {/* CONTEÚDO SCROLLÁVEL */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+
           {/* TELA DE LOGIN POR CPF SE NÃO IDENTIFICADO */}
           {!activeCpf ? (
             <div className="max-w-md mx-auto py-8 text-center space-y-6">
@@ -201,17 +222,13 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               </div>
 
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white">
-                  Acesse seu Histórico com seu CPF
-                </h3>
+                <h3 className="text-xl font-bold text-white">Acesse seu Histórico com seu CPF</h3>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Informe o CPF utilizado na matrícula para ver todos os seus
-                  cursos contratados, acessar as aulas liberadas e emitir seus
-                  certificados homologados.
+                  Informe o CPF utilizado na matrícula para ver todos os seus cursos contratados, acessar as aulas liberadas e emitir seus certificados homologados.
                 </p>
               </div>
 
-              <form
+              <form 
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleLoadPortal(cpfInput);
@@ -260,27 +277,24 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   <span>Ambiente Protegido DETRAN</span>
                 </div>
                 <p className="text-[11px] text-zinc-500">
-                  O acesso ao histórico é vinculado diretamente aos registros
-                  oficiais no banco de dados e sincronizado automaticamente com
-                  as confirmações de pagamento via Pix ou Cartão.
+                  O acesso ao histórico é vinculado diretamente aos registros oficiais no banco de dados e sincronizado automaticamente com as confirmações de pagamento via Pix ou Cartão.
                 </p>
               </div>
             </div>
           ) : (
             /* CONTEÚDO DO PORTAL LOGADO */
             <div className="space-y-6">
+
               {/* CARD DE IDENTIFICAÇÃO DO CONDUTOR */}
               <div className="bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 border border-zinc-800 rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-md">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-2xl bg-zinc-800 text-zinc-200 border border-zinc-700 flex items-center justify-center text-xl font-black uppercase shrink-0">
-                    {student?.fullName ? student.fullName.slice(0, 2) : "AL"}
+                    {student?.fullName ? student.fullName.slice(0, 2) : 'AL'}
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-bold text-white leading-tight">
-                        {student?.fullName ||
-                          orders[0]?.customerName ||
-                          "Condutor Matriculado"}
+                        {student?.fullName || orders[0]?.customerName || 'Condutor Matriculado'}
                       </h3>
                       <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono">
                         CPF: {formatCPF(activeCpf)}
@@ -288,28 +302,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     </div>
                     <div className="flex items-center gap-4 text-xs text-zinc-400 flex-wrap">
                       {student?.cnhNumber && (
-                        <span>
-                          CNH:{" "}
-                          <strong className="text-zinc-200">
-                            {student.cnhNumber}
-                          </strong>{" "}
-                          (Cat. {student.cnhCategory || "B"})
-                        </span>
+                        <span>CNH: <strong className="text-zinc-200">{student.cnhNumber}</strong> (Cat. {student.cnhCategory || 'B'})</span>
                       )}
-                      <span>
-                        WhatsApp:{" "}
-                        <strong className="text-zinc-200">
-                          {student?.whatsapp ||
-                            orders[0]?.customerWhatsapp ||
-                            "Não informado"}
-                        </strong>
-                      </span>
-                      <span>
-                        E-mail:{" "}
-                        <strong className="text-zinc-200">
-                          {student?.email || orders[0]?.customerEmail}
-                        </strong>
-                      </span>
+                      <span>WhatsApp: <strong className="text-zinc-200">{student?.whatsapp || orders[0]?.customerWhatsapp || 'Não informado'}</strong></span>
+                      <span>E-mail: <strong className="text-zinc-200">{student?.email || orders[0]?.customerEmail}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -320,8 +316,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     onClick={() => {
                       onClose();
                       // Rola para a vitrine para escolher outro curso
-                      const el = document.getElementById("catalogo-cursos");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                      const el = document.getElementById('catalogo-cursos');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
                     }}
                     className="w-full md:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md shadow-red-900/30"
                   >
@@ -334,191 +330,167 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               {/* STATS / MÉTRICAS DO ALUNO */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3.5">
-                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">
-                    Cursos Matriculados
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-white">
-                    {orders.length}
-                  </span>
+                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">Cursos Matriculados</span>
+                  <span className="text-xl sm:text-2xl font-black text-white">{orders.length}</span>
                 </div>
                 <div className="bg-zinc-950/80 border border-emerald-900/40 rounded-xl p-3.5">
-                  <span className="text-[11px] font-semibold text-emerald-400 block mb-1">
-                    Acesso Liberado (Pagos)
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-emerald-400">
-                    {paidOrders.length}
-                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-400 block mb-1">Acesso Liberado (Pagos)</span>
+                  <span className="text-xl sm:text-2xl font-black text-emerald-400">{paidOrders.length}</span>
                 </div>
                 <div className="bg-zinc-950/80 border border-amber-900/40 rounded-xl p-3.5">
-                  <span className="text-[11px] font-semibold text-amber-400 block mb-1">
-                    Aguardando Pagamento
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-amber-400">
-                    {pendingOrders.length}
-                  </span>
+                  <span className="text-[11px] font-semibold text-amber-400 block mb-1">Aguardando Pagamento</span>
+                  <span className="text-xl sm:text-2xl font-black text-amber-400">{pendingOrders.length}</span>
                 </div>
                 <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-3.5">
-                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">
-                    Carga Horária EAD
-                  </span>
-                  <span className="text-xl sm:text-2xl font-black text-white">
-                    {totalHours}h
-                  </span>
+                  <span className="text-[11px] font-semibold text-zinc-400 block mb-1">Carga Horária EAD</span>
+                  <span className="text-xl sm:text-2xl font-black text-white">{totalHours}h</span>
                 </div>
               </div>
 
-              {/* VISUALIZADOR DA SALA DE AULA VIRTUAL SE SELECIONADA */}
-              {activeClassroomCourse && (
-                <div
-                  id="classroom-player"
-                  className="bg-zinc-950 border border-zinc-700 rounded-2xl overflow-hidden shadow-2xl space-y-4 p-5 animate-fadeIn"
-                >
+              {/* VISUALIZADOR DO COMPROVANTE OFICIAL DE MATRÍCULA E PAGAMENTO */}
+              {viewingReceipt && (
+                <div id="student-receipt-modal" className="bg-zinc-950 border border-emerald-500/50 rounded-2xl p-5 sm:p-6 text-zinc-100 shadow-2xl space-y-5 animate-fadeIn">
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
-                        <PlayCircle className="w-5 h-5" />
-                      </div>
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <FileCheck className="w-5 h-5" />
                       <div>
-                        <h4 className="text-sm font-bold text-white">
-                          Sala de Aula Virtual:{" "}
-                          {activeClassroomCourse.courseTitle}
+                        <h4 className="font-bold text-white text-sm sm:text-base">
+                          Comprovante de Matrícula & Pagamento
                         </h4>
-                        <span className="text-[11px] text-zinc-400">
-                          Matrícula homologada no DETRAN • ID Pedido:{" "}
-                          {activeClassroomCourse.id}
+                        <span className="text-[11px] text-emerald-400 font-medium">
+                          Acesso Liberado • Sistema Homologado DETRAN PR
                         </span>
                       </div>
                     </div>
                     <button
-                      onClick={() => setActiveClassroomCourse(null)}
-                      className="text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800"
-                    >
-                      Fechar Sala
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Lista de Módulos */}
-                    <div className="md:col-span-1 space-y-2 bg-zinc-900/60 p-3 rounded-xl border border-zinc-800 max-h-64 overflow-y-auto">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-2">
-                        Módulos do Curso
-                      </span>
-                      {[
-                        "Módulo 1: Legislação de Trânsito e Normas Vigentes",
-                        "Módulo 2: Direção Defensiva Aplicada à Atividade",
-                        "Módulo 3: Prevenção de Acidentes e Primeiros Socorros",
-                        "Módulo 4: Relacionamento Interpessoal e Ética",
-                        "Módulo 5: Avaliação Final e Homologação DETRAN",
-                      ].map((mod, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setSelectedLesson(mod)}
-                          className={`w-full text-left p-2.5 rounded-lg text-xs transition flex items-center gap-2 ${
-                            selectedLesson === mod ||
-                            (!selectedLesson && idx === 0)
-                              ? "bg-red-600 text-white font-semibold shadow"
-                              : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
-                          }`}
-                        >
-                          <PlayCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span className="truncate">{mod}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Player / Conteúdo da Aula */}
-                    <div className="md:col-span-2 bg-black rounded-xl p-6 flex flex-col items-center justify-center min-h-[220px] text-center border border-zinc-800">
-                      <div className="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center mb-3 shadow-lg shadow-red-900/40 cursor-pointer hover:scale-105 transition">
-                        <PlayCircle className="w-8 h-8 ml-0.5" />
-                      </div>
-                      <h5 className="font-bold text-white text-sm">
-                        {selectedLesson ||
-                          "Módulo 1: Legislação de Trânsito e Normas Vigentes"}
-                      </h5>
-                      <p className="text-xs text-zinc-400 mt-1 max-w-sm">
-                        Vídeo-aula em alta definição com controle de presença
-                        biométrica e simulados de fixação.
-                      </p>
-                      <div className="mt-4 inline-flex items-center gap-2 text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-800/60 px-3 py-1 rounded-full">
-                        <CheckCircle className="w-3.5 h-3.5" />
-                        <span>Acesso 100% Liberado no Sistema</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* MODAL / VISUALIZADOR DE CERTIFICADO */}
-              {viewingCertificate && (
-                <div className="bg-zinc-950 border border-amber-500/50 rounded-2xl p-6 text-zinc-100 shadow-2xl space-y-4 animate-fadeIn">
-                  <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                    <div className="flex items-center gap-2 text-amber-400">
-                      <Award className="w-5 h-5" />
-                      <h4 className="font-bold text-white">
-                        Certificado Homologado DETRAN/SENATRAN
-                      </h4>
-                    </div>
-                    <button
-                      onClick={() => setViewingCertificate(null)}
-                      className="text-xs text-zinc-400 hover:text-white px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800"
+                      onClick={() => setViewingReceipt(null)}
+                      className="text-xs text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 transition"
                     >
                       Fechar
                     </button>
                   </div>
 
-                  <div className="bg-white text-zinc-950 p-6 rounded-xl border-4 border-amber-500/30 text-center space-y-3 font-serif">
-                    <div className="text-xs uppercase tracking-widest text-zinc-600 font-sans font-bold">
-                      República Federativa do Brasil • DETRAN EAD Homologado
+                  {/* DOCUMENTO DO COMPROVANTE */}
+                  <div className="bg-white text-zinc-900 rounded-xl p-5 sm:p-7 border border-zinc-200 shadow-sm space-y-5 font-sans">
+                    {/* Topo do Comprovante */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-200 pb-4 gap-3">
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-wider text-red-700">
+                          DETRAN PR • EDUCAÇÃO PARA O TRÂNSITO EAD
+                        </div>
+                        <h3 className="text-lg font-black text-zinc-950 uppercase mt-0.5">
+                          Comprovante Oficial de Matrícula
+                        </h3>
+                        <p className="text-xs text-zinc-600">
+                          Homologado conforme Portarias SENATRAN/CONTRAN e DETRAN PR
+                        </p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          Pagamento Confirmado
+                        </span>
+                        <div className="text-[11px] text-zinc-500 mt-1 font-mono">
+                          ID: #{viewingReceipt.id}
+                        </div>
+                      </div>
                     </div>
-                    <h2 className="text-xl sm:text-2xl font-black text-zinc-900 uppercase">
-                      Certificado de Conclusão
-                    </h2>
-                    <p className="text-xs text-zinc-700 max-w-lg mx-auto font-sans leading-relaxed">
-                      Certificamos que{" "}
-                      <strong>{viewingCertificate.customerName}</strong>,
-                      inscrito no CPF sob o nº{" "}
-                      <strong>
-                        {formatCPF(viewingCertificate.customerCpf)}
-                      </strong>
-                      , CNH nº{" "}
-                      <strong>
-                        {viewingCertificate.customerCnhNumber ||
-                          student?.cnhNumber ||
-                          "REGISTRADA"}
-                      </strong>
-                      , concluiu com aproveitamento o curso de:
-                    </p>
-                    <div className="text-lg font-bold text-red-700 uppercase font-sans py-1">
-                      {viewingCertificate.courseTitle}
+
+                    {/* Dados do Aluno e Curso */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      {/* Bloco Aluno */}
+                      <div className="bg-zinc-50 p-3.5 rounded-lg border border-zinc-200/80 space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider block">
+                          Dados do Condutor / Aluno
+                        </span>
+                        <div className="text-sm font-bold text-zinc-900">
+                          {viewingReceipt.customerName}
+                        </div>
+                        <div className="text-zinc-700">
+                          <span className="text-zinc-500">CPF:</span> <strong>{formatCPF(viewingReceipt.customerCpf)}</strong>
+                        </div>
+                        {viewingReceipt.customerCnhNumber && (
+                          <div className="text-zinc-700">
+                            <span className="text-zinc-500">CNH:</span> <strong>{viewingReceipt.customerCnhNumber}</strong> (Cat. {viewingReceipt.customerCnhCategory || 'B'})
+                          </div>
+                        )}
+                        <div className="text-zinc-700">
+                          <span className="text-zinc-500">E-mail:</span> {viewingReceipt.customerEmail}
+                        </div>
+                        {viewingReceipt.customerWhatsapp && (
+                          <div className="text-zinc-700">
+                            <span className="text-zinc-500">WhatsApp:</span> {viewingReceipt.customerWhatsapp}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bloco Curso e Homologação */}
+                      <div className="bg-zinc-50 p-3.5 rounded-lg border border-zinc-200/80 space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider block">
+                          Curso Especializado Homologado
+                        </span>
+                        <div className="text-sm font-bold text-zinc-900">
+                          {viewingReceipt.courseTitle}
+                        </div>
+                        <div className="text-zinc-700">
+                          <span className="text-zinc-500">Carga Horária:</span> <strong>50 Horas</strong>
+                        </div>
+                        <div className="text-zinc-700">
+                          <span className="text-zinc-500">Modalidade:</span> 100% Online EAD com Biometria Facial
+                        </div>
+                        <div className="text-zinc-700">
+                          <span className="text-zinc-500">Validação:</span> Resolução CONTRAN nº 789/20 e DETRAN PR
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-xs text-zinc-600 font-sans flex items-center justify-center gap-6 pt-2 border-t border-zinc-200">
-                      <span>
-                        Carga Horária: <strong>50 Horas</strong>
-                      </span>
-                      <span>
-                        Autenticação:{" "}
-                        <strong className="font-mono">
-                          {viewingCertificate.id}
+
+                    {/* Dados Financeiros e de Autenticação */}
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-lg p-3.5 text-xs grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 block">Valor Liquidado</span>
+                        <strong className="text-emerald-700 text-sm font-black">
+                          {viewingReceipt.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </strong>
-                      </span>
-                      <span>
-                        Emissão:{" "}
-                        <strong>
-                          {new Date().toLocaleDateString("pt-BR")}
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-500 block">Forma de Pagamento</span>
+                        <strong className="text-zinc-800">
+                          {viewingReceipt.paymentMethod === 'CREDIT_CARD' ? 'Cartão de Crédito' : viewingReceipt.paymentMethod === 'DEBIT_CARD' ? 'Cartão de Débito' : 'Pix Instantâneo'}
                         </strong>
-                      </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-500 block">Data / Hora</span>
+                        <strong className="text-zinc-800">
+                          {new Date(viewingReceipt.createdAt).toLocaleString('pt-BR')}
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-500 block">Gateway Autenticador</span>
+                        <strong className="text-zinc-800">Mercado Pago S.A.</strong>
+                      </div>
+                    </div>
+
+                    {/* Rodapé do Documento */}
+                    <div className="border-t border-zinc-200 pt-3 text-[11px] text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+                      <span>Autenticação Digital: <code className="text-zinc-800 font-mono text-[10px]">{viewingReceipt.txid || viewingReceipt.id}</code></span>
+                      <span>Sincronizado diretamente no RENACH / CNH Digital</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2">
+                  {/* Ações do Comprovante */}
+                  <div className="flex items-center justify-end gap-2 pt-1">
                     <button
-                      onClick={() =>
-                        alert("Download do PDF do Certificado iniciado.")
-                      }
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+                      onClick={() => window.print()}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow"
                     >
-                      <Download className="w-4 h-4" />
-                      <span>Baixar Certificado em PDF</span>
+                      <Printer className="w-4 h-4" />
+                      <span>Imprimir / Salvar em PDF</span>
+                    </button>
+                    <button
+                      onClick={() => setViewingReceipt(null)}
+                      className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition"
+                    >
+                      Fechar
                     </button>
                   </div>
                 </div>
@@ -528,31 +500,31 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
               <div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3 flex-wrap">
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => setFilterTab("all")}
+                    onClick={() => setFilterTab('all')}
                     className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                      filterTab === "all"
-                        ? "bg-zinc-800 text-white border border-zinc-700"
-                        : "text-zinc-400 hover:text-white"
+                      filterTab === 'all'
+                        ? 'bg-zinc-800 text-white border border-zinc-700'
+                        : 'text-zinc-400 hover:text-white'
                     }`}
                   >
                     Todos os Cursos ({orders.length})
                   </button>
                   <button
-                    onClick={() => setFilterTab("paid")}
+                    onClick={() => setFilterTab('paid')}
                     className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                      filterTab === "paid"
-                        ? "bg-emerald-950 text-emerald-300 border border-emerald-700/50"
-                        : "text-zinc-400 hover:text-emerald-400"
+                      filterTab === 'paid'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-700/50'
+                        : 'text-zinc-400 hover:text-emerald-400'
                     }`}
                   >
                     Liberados / Pagos ({paidOrders.length})
                   </button>
                   <button
-                    onClick={() => setFilterTab("pending")}
+                    onClick={() => setFilterTab('pending')}
                     className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
-                      filterTab === "pending"
-                        ? "bg-amber-950 text-amber-300 border border-amber-700/50"
-                        : "text-zinc-400 hover:text-amber-400"
+                      filterTab === 'pending'
+                        ? 'bg-amber-950 text-amber-300 border border-amber-700/50'
+                        : 'text-zinc-400 hover:text-amber-400'
                     }`}
                   >
                     Aguardando Pagamento ({pendingOrders.length})
@@ -572,36 +544,29 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     Nenhum curso encontrado nesta visualização.
                   </h4>
                   <p className="text-xs text-zinc-500">
-                    Você pode escolher qualquer curso da nossa vitrine para
-                    expandir sua qualificação como condutor.
+                    Você pode escolher qualquer curso da nossa vitrine para expandir sua qualificação como condutor.
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {displayedOrders.map((order) => {
-                    const isPaid = order.status === "PAID";
-                    const courseDef = COURSES.find(
-                      (c) => c.id === order.courseId,
-                    );
+                    const isPaid = order.status === 'PAID';
+                    const courseDef = coursesList.find(c => c.id === order.courseId);
 
                     return (
-                      <div
+                      <div 
                         key={order.id}
                         className={`bg-zinc-950 border rounded-2xl p-4 flex flex-col justify-between gap-4 transition-all hover:border-zinc-700 ${
-                          isPaid
-                            ? "border-emerald-900/50"
-                            : "border-amber-900/40"
+                          isPaid ? 'border-emerald-900/50' : 'border-amber-900/40'
                         }`}
                       >
                         <div className="space-y-3">
                           <div className="flex items-start justify-between gap-2">
-                            <span
-                              className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 ${
-                                isPaid
-                                  ? "bg-emerald-950 text-emerald-300 border border-emerald-800/50"
-                                  : "bg-amber-950 text-amber-300 border border-amber-800/50"
-                              }`}
-                            >
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 ${
+                              isPaid 
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/50' 
+                                : 'bg-amber-950 text-amber-300 border border-amber-800/50'
+                            }`}>
                               {isPaid ? (
                                 <>
                                   <CheckCircle className="w-3 h-3 text-emerald-400" />
@@ -622,11 +587,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
                           <div className="flex gap-3">
                             <img
-                              src={
-                                order.courseThumbnail ||
-                                courseDef?.thumbnail ||
-                                "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80"
-                              }
+                              src={order.courseThumbnail || courseDef?.thumbnail || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80'}
                               alt={order.courseTitle}
                               className="w-20 h-20 rounded-xl object-cover border border-zinc-800 shrink-0"
                             />
@@ -635,14 +596,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                                 {order.courseTitle}
                               </h4>
                               <p className="text-[11px] text-zinc-400">
-                                {courseDef?.duration || "50 Horas"} •
-                                Homologação Portaria SENATRAN/DETRAN
+                                {courseDef?.duration || '50 Horas'} • Homologação Portaria SENATRAN/DETRAN
                               </p>
                               <div className="text-[11px] text-zinc-500">
-                                Matriculado em:{" "}
-                                {new Date(order.createdAt).toLocaleDateString(
-                                  "pt-BR",
-                                )}
+                                Matriculado em: {new Date(order.createdAt).toLocaleDateString('pt-BR')}
                               </div>
                             </div>
                           </div>
@@ -651,36 +608,28 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                         {/* Ações do Curso */}
                         <div className="pt-3 border-t border-zinc-900 flex items-center justify-between gap-2 flex-wrap">
                           {isPaid ? (
-                            <div className="flex items-center gap-2 w-full sm:w-auto flex-1">
-                              {/*<button
-                                onClick={() => setActiveClassroomCourse(order)}
-                                className="flex-1 sm:flex-initial px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow"
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              <div className="text-xs">
+                                <span className="text-zinc-500 block text-[10px]">Valor Pago:</span>
+                                <strong className="text-emerald-400 font-bold">
+                                  {order.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </strong>
+                              </div>
+                              <button
+                                id={`btn-comprovante-${order.id}`}
+                                onClick={() => setViewingReceipt(order)}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-950/40"
                               >
-                                <PlayCircle className="w-3.5 h-3.5" />
-                                <span>Acessar Sala de Aula</span>
-                              </button>*/}
-                              {/*<button
-                                onClick={() => setViewingCertificate(order)}
-                                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-amber-300 rounded-lg text-xs font-semibold border border-zinc-700 flex items-center gap-1.5 transition"
-                                title="Ver Certificado"
-                              >
-                                <Award className="w-3.5 h-3.5 text-amber-400" />
-                                <span className="hidden sm:inline">
-                                  Certificado
-                                </span>
-                              </button>*/}
+                                <FileCheck className="w-3.5 h-3.5 text-emerald-100" />
+                                <span>Ver Comprovante</span>
+                              </button>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between gap-2 w-full">
                               <div className="text-xs">
-                                <span className="text-zinc-500 block text-[10px]">
-                                  Valor:
-                                </span>
+                                <span className="text-zinc-500 block text-[10px]">Valor:</span>
                                 <strong className="text-white">
-                                  {order.amount.toLocaleString("pt-BR", {
-                                    style: "currency",
-                                    currency: "BRL",
-                                  })}
+                                  {order.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </strong>
                               </div>
                               <button
@@ -709,8 +658,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-red-500" />
                       <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                        Expandir Qualificação • Outros Cursos Recomendados para
-                        sua CNH
+                        Expandir Qualificação • Outros Cursos Recomendados para sua CNH
                       </h4>
                     </div>
                     <span className="text-[10px] text-zinc-400">
@@ -719,8 +667,8 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                    {suggestedCourses.map((course) => (
-                      <div
+                    {suggestedCourses.map(course => (
+                      <div 
                         key={course.id}
                         className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 flex flex-col justify-between hover:border-zinc-700 transition-all group"
                       >
@@ -738,10 +686,7 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
 
                         <div className="pt-3 mt-2 border-t border-zinc-800 flex items-center justify-between">
                           <span className="text-xs font-black text-white">
-                            {course.price.toLocaleString("pt-BR", {
-                              style: "currency",
-                              currency: "BRL",
-                            })}
+                            {course.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </span>
                           <button
                             onClick={() => {
@@ -759,8 +704,10 @@ export const StudentPortalModal: React.FC<StudentPortalModalProps> = ({
                   </div>
                 </div>
               )}
+
             </div>
           )}
+
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { generateBacenPixPayload } from './pixHelper';
-import { MercadoPagoConfigStatus } from '../src/types';
+import type { MercadoPagoConfigStatus } from '../src/types';
 
 export class MercadoPagoService {
   private getAccessToken(): string {

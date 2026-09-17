@@ -1,5 +1,10 @@
 import { Course } from '../types';
 
+/**
+ * Catálogo Base de Cursos DETRAN EAD.
+ * ATENÇÃO: O banco de dados Supabase é a ÚNICA fonte de verdade dos dados e preços em tempo real.
+ * Estes dados estáticos servem como esquema e contingência de inicialização.
+ */
 export const COURSES: Course[] = [
   // =========================================================================
   // 1. CURSOS ESPECIALIZADOS / FORMAÇÃO DE CONDUTORES (DETRAN)
@@ -13,7 +18,9 @@ export const COURSES: Course[] = [
     categoryLabel: 'Formação Especializada',
     description: 'Capacitação obrigatória de 50 horas para condutores de ambulâncias, viaturas policiais e resgate.',
     fullDescription: 'Curso homologado pelo DETRAN/CONTRAN com lançamento direto no RENACH/CNH Digital. Treinamento completo em direção defensiva emergencial, condução segura em deslocamentos rápidos, psicologia e legislação.',
-    price: 169.00,
+    price: 1.20,
+    costPrice: 1.00,
+    profitPercent: 20,
     duration: '50 horas',
     workloadHours: 50,
     detranApproval: 'Homologado Resolução CONTRAN nº 789/20 e DETRAN PR',
@@ -34,7 +41,9 @@ export const COURSES: Course[] = [
     categoryLabel: 'Formação Especializada',
     description: 'Curso obrigatório para condução de cargas com combustíveis, inflamáveis, explosivos e químicas.',
     fullDescription: 'Habilitação profissional para transporte rodoviário de cargas perigosas. Conteúdo completo sobre simbologia de risco, normas ANTT, equipamentos EPI e procedimentos em sinistros.',
-    price: 169.00,
+    price: 2.41,
+    costPrice: 1.00,
+    profitPercent: 141.4,
     duration: '50 horas',
     workloadHours: 50,
     detranApproval: 'Homologado CONTRAN / DETRAN PR',
@@ -55,7 +64,9 @@ export const COURSES: Course[] = [
     categoryLabel: 'Formação Especializada',
     description: 'Qualificação exigida para motoristas de vans escolares, micro-ônibus e transporte infantil.',
     fullDescription: 'Capacite-se para transportar crianças e adolescentes com máxima segurança e conformidade perante as secretarias municipais e o DETRAN.',
-    price: 169.00,
+    price: 1.10,
+    costPrice: 1.00,
+    profitPercent: 10,
     duration: '50 horas',
     workloadHours: 50,
     detranApproval: 'Homologado DETRAN PR',
